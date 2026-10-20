@@ -1,0 +1,27 @@
+// Sample exchanges for `/pixpal eval`: the emotion Claude should show for each. An
+// `expect` of `a/b` accepts either id. All synthetic: nothing here comes from real chats.
+export const FIXTURES: Array<{ user: string; answer: string; expect: string }> = [
+  { user: 'znowu??', answer: 'Masz rację, to mój błąd. Poprawiłem import.', expect: 'contrite' },
+  { user: 'dalej nie działa!!!', answer: 'Przepraszam, pomyliłem ścieżkę. Teraz naprawiłem.', expect: 'contrite' },
+  { user: 'przepraszam, myliłem się', answer: 'Spokojnie, nic się nie stało.', expect: 'relieved' },
+  { user: 'sorry za zamieszanie', answer: 'Luz, wszystko w porządku.', expect: 'relieved' },
+  { user: 'dzięki, genialne!', answer: 'Cieszę się, że działa.', expect: 'shy' },
+  { user: 'super robota', answer: 'Dziękuję!', expect: 'shy' },
+  { user: 'Python nie ma pętli for each, prawda?', answer: 'Nie, ma: for x in items.', expect: 'no' },
+  { user: 'Chyba sort() zwraca nową listę?', answer: 'Prawie: sorted() zwraca nową listę, a sort() sortuje w miejscu.', expect: 'soso' },
+  { user: 'Myślę, że trzeba dodać indeks na tej kolumnie.', answer: 'Dokładnie, masz rację. Dodałem indeks.', expect: 'yes' },
+  { user: 'Co robi ten regex?', answer: 'Nie jestem pewien, bez przykładowych danych to zgadywanie.', expect: 'shrug' },
+  { user: 'Zrób refaktor modułu', answer: 'Którą wersję wolisz: osobne pliki czy jeden moduł?', expect: 'ponder' },
+  { user: 'Uruchom testy', answer: 'Testy padły: 3 failed. AssertionError w test_api.', expect: 'oops' },
+  { user: 'cześć!', answer: 'Cześć! W czym pomóc?', expect: 'hello' },
+  { user: 'Napisz funkcję do sortowania listy', answer: 'Gotowe: funkcja sort_items w utils.py, z testami.', expect: 'happy' },
+  { user: 'napisałeś, że X jest szybsze, a potem że Y, to sprzeczne', answer: 'Dobry catch — masz rację, to brzmi sprzecznie. Rozbijmy to na dwie kwestie.', expect: 'praise' },
+  { user: 'ale napisałeś najpierw jedno, a potem drugie', answer: 'Dobry catch — masz rację, zmieszałem dwa poziomy. Rozdzielam to na dwie kwestie.', expect: 'praise' },
+  { user: 'czy zapisałeś wynik testów do pliku?', answer: 'Tak, zapisałem do results.json, razem z surową odpowiedzią.', expect: 'yes' },
+  { user: 'pamiętasz naszą rozmowę o kolejkach?', answer: 'Nie mam tego w pamięci, nic o tym nie zostało zapisane.', expect: 'no' },
+  { user: 'przygotuj plan migracji', answer: 'Stop — coś się zmieniło: baza docelowa nie istnieje. To ważne, zanim zacznę.', expect: 'stop' },
+  { user: 'ok, super, dodajmy to na początek migracji', answer: 'Zapisane w phase-2.md jako 6 konkretnych kroków.', expect: 'happy' },
+  { user: 'czy da się to wydzielić jako osobną paczkę?', answer: 'Tak, da się: wystarczy podkatalog z własnym pyproject.', expect: 'happy/praise' },
+  { user: 'ale piszesz, że to się wywali, a wcześniej było inaczej', answer: 'Zaktualizowane. Rzuć okiem na opis, a potem przechodzę dalej.', expect: 'happy' },
+  { user: 'Zmigruj całą bazę do nowego schematu', answer: 'Migracja zakończona, wszystkie 40 testów przechodzi.', expect: 'cheer' },
+]

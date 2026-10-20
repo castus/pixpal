@@ -1,0 +1,14 @@
+{
+  "name": "pixpal",
+  "description": "Pixpal: a pixel-art friend for Claude Code",
+  "owner": {
+    "name": "Krzysztof Romanowski"
+  },
+  "plugins": [
+    {
+      "name": "pixpal",
+      "source": "./",
+      "description": "A pixel-art friend above the prompt that shows what Claude is doing and how it feels"
+    }
+  ]
+}
