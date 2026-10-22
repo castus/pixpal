@@ -14,7 +14,8 @@
   <a href="#characters">Characters</a> ·
   <a href="#what-it-shows">What it shows</a> ·
   <a href="#settings">Settings</a> ·
-  <a href="#privacy">Privacy</a>
+  <a href="#privacy">Privacy</a> ·
+  <a href="#contributing">Contributing</a>
 </p>
 
 <p align="center"><img src="docs/pixpal-row.svg" alt="Five Pixpal characters: a robot cheering, a cat waving, Claude nodding yes, an owl blushing and a ghost surprised, each with a speech bubble" width="100%"></p>
@@ -30,20 +31,18 @@
 
 Requires Claude Code **2.1.299** or later.
 
-```
+```bash
 /plugin marketplace add castus/pixpal
-```
-
-```
 /plugin install pixpal@pixpal
 ```
 
-Then run `/pixpal init` to pick a character, a look, a language and how emotions are picked, in five questions.
+Then run `/pixpal init` to pick a character, a look, a language and how emotions are picked.
 
 To update, run this and then `/reload` in every open session:
 
 ```bash
-claude plugin marketplace update pixpal && claude plugin update pixpal@pixpal
+claude plugin marketplace update pixpal && \
+claude plugin update pixpal@pixpal
 ```
 
 To uninstall:
@@ -71,6 +70,7 @@ Pixpal follows a turn in three phases.
 1. **Between turns** it rests. While you type, it peeks over a fence at your prompt. After a minute of quiet it goes to sleep.
 2. **While Claude works** it shows the tool in use, one to one: `Read` is a book, `Grep` a lens, `Edit` a keyboard, a test run a checklist, `git` its own scene, a subagent a juggling act. Quick calls (under 0.6 s) do not flicker by.
 3. **When the answer arrives** it plays one emotion twice, chosen from your message and Claude's answer (by keyword rules, or by Claude Haiku with `/pixpal emotions ai`), from Claude's side: if you say sorry, it is relieved; if you say "again??", it is sorry. After a turn of over a minute it lets out a tired *phew* first.
+4. **Agents in the background** each running subagent stands beside it as a mini robot (up to four). More than that shows as a `+N` count next to the last one; when an agent finishes, its mini leaves.
 
 A speech bubble names each emotion ("Yay!", "Sort of", "No worries") and each kind of work ("Reading…", "Testing…"), typed out letter by letter.
 
@@ -78,7 +78,7 @@ A speech bubble names each emotion ("Yay!", "Sort of", "No worries") and each ki
 
 | Command | What it does |
 | --- | --- |
-| `/pixpal init` | set everything up in five questions |
+| `/pixpal init` | set everything up |
 | `/pixpal skin [robot\|cat\|claude\|owl\|ghost]` | who Pixpal is |
 | `/pixpal theme [auto\|dark\|light]` | the look; `auto` follows your system's light or dark mode |
 | `/pixpal language <name> \| auto` | the bubbles' language: any language, e.g. `french`, `japanese`; `auto` uses Polish or English after your prompt |
@@ -92,21 +92,20 @@ Each conversation keeps its own choices, so a resumed session comes back with th
 
 Pixpal runs inside Claude Code and makes no network calls of its own. By default nothing you write leaves your machine because of it: keyword rules pick the emotions.
 
-Two features use Claude Code's own model access, only when you turn them on. They go through the same client, account and provider as your conversation (Anthropic, Amazon Bedrock or Google Vertex, under the same terms), and they send only text that your conversation has already sent:
+Two features use Claude Code's own model access, only when you turn them on. They go through the same client, account and provider as your conversation (Anthropic, Amazon Bedrock or Google Vertex, under the same terms):
 
-- **Emotions, with `/pixpal emotions ai`:** after each answer, the first 500 characters of your message and the start and end of Claude's answer go to Claude Haiku, which names one emotion. About 900 tokens per answer. If Haiku is blocked or does not answer, the keyword rules take over.
-- **Languages, with `/pixpal language <name>`:** the first time you choose a language, the bubble lines (not your conversation) are translated once by Claude Haiku and kept on your machine.
+- **Emotions, with `/pixpal emotions ai`:** after each answer, the first 500 characters of your message and the opening and closing of Claude's answer (300 + 200 characters when it is long) go to Claude Haiku, which names one emotion. About 900 tokens per answer. If Haiku is blocked or does not answer, the keyword rules take over. Aborted or empty turns never call the model.
+- **Languages, with `/pixpal language <name>`:** the first time you choose a named language, the built-in English bubble lines (not your conversation) are translated once by Claude Haiku and kept on your machine. `auto` uses the built-in Polish and English lines and sends nothing.
 
 On macOS, `theme auto` runs `defaults read -g AppleInterfaceStyle` once a minute to read your system's appearance.
 
-## Development
+## Limitations
 
-```bash
-claude --plugin-dir /path/to/pixpal               # run it from a checkout
-claude plugin validate . && claude plugin test .  # checks and tests
-node --experimental-strip-types tools/gallery.ts  # every scene, animated, in your terminal
-node --experimental-strip-types tools/gallery.ts --cat --light --en
-```
+TBD
+
+## Contributing
+
+Pull requests are very welcome. If something breaks or feels off, please [open an issue](https://github.com/castus/pixpal/issues).
 
 `MOOD_GUIDE.md` is the design of what Pixpal shows and when.
 

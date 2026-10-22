@@ -26,8 +26,6 @@ const peekFrames = () => {
   ]
 }
 
-const WAIT: Pose = { mouth: 'flat' }
-
 // ball positions of the juggling circle above the head
 const CIRCLE: Array<[number, number]> = [[8, 1], [10, 0], [13, 0], [15, 1], [13, 2], [10, 2]]
 

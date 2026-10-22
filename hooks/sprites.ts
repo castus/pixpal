@@ -198,12 +198,11 @@ function sideBook(angle?: number): string[] {
   return rows.map(row => row.join(''))
 }
 
-export const PROPS: Record<string, string[]> = {
+const PROPS: Record<string, string[]> = {
   cloud0: cloud(0),
   cloud1: cloud(1),
   cloud2: cloud(2),
   cloud3: cloud(3),
-  cross: ['r.r', '.r.', 'r.r'],
   clock0: clock(0),
   clock1: clock(1),
   clock2: clock(2),
@@ -528,7 +527,9 @@ const PANEL_TOP = [0x2c, 0x34, 0x47]
 const PANEL_BOTTOM = [0x14, 0x19, 0x23]
 // Props reach the canvas edges, so the panel adds a column of margin on each side.
 const PAD = 1
-export const FRAME_W = W + 2 * PAD
+// One empty column left of the panel, so it sits one cell off the band's left edge.
+const LEFT_GAP = 1
+export const FRAME_W = W + 2 * PAD + LEFT_GAP
 
 const hex = (rgb: number[]) => `#${rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`
 const rgb = (color: string) => color.slice(1).match(/../g)!.map(v => parseInt(v, 16))
@@ -587,7 +588,12 @@ function backdrop(px: string[], theme: Theme, skin: SkinId): Array<Array<string 
   const width = (px[0]?.length ?? W) + 2 * PAD
 
   return Array.from({ length: H + TOP_GAP }, (_, row) =>
-    Array.from({ length: width }, (_, x) => {
+    Array.from({ length: LEFT_GAP + width }, (_, col) => {
+      if (col < LEFT_GAP) {
+        return undefined
+      }
+
+      const x = col - LEFT_GAP
       const y = row - TOP_GAP
 
       if (!isPanel(x, y, width)) {
