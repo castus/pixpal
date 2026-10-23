@@ -30,6 +30,8 @@ const agents = atom({ plugin: 'pixpal', key: 'agents' } as const, 0)
 const lang = atom({ plugin: 'pixpal', key: 'lang' } as const, 'en' as Lang)
 // Whether the robot speaks in bubbles at all (emotions and work); /pixpal bubbles toggles it.
 const bubbles = atom({ plugin: 'pixpal', key: 'bubbles' } as const, true)
+// Whether Pixpal shows in the band at all; hidden, it leaves the band to the other mods.
+const visible = atom({ plugin: 'pixpal', key: 'visible' } as const, true)
 // The robot's look: 'auto' (default, follows the system's appearance), 'dark' or 'light';
 // /pixpal theme sets it. systemTheme is the system's appearance, re-read on a clock.
 const theme = atom({ plugin: 'pixpal', key: 'theme' } as const, 'auto' as 'auto' | 'dark' | 'light')
@@ -105,7 +107,7 @@ const SETTINGS_KEY = 'pixpal.settings'
 const SESSIONS_KEY = 'pixpal.sessions'
 // How many sessions' choices are kept; the oldest go first.
 const SESSIONS_KEPT = 200
-type Settings = { theme?: string; skin?: string; bubbles?: boolean; language?: string; emotions?: 'ai' | 'keywords' }
+type Settings = { theme?: string; skin?: string; bubbles?: boolean; visible?: boolean; language?: string; emotions?: 'ai' | 'keywords' }
 
 const saveSetting = async ($: Ctx, patch: Settings) => {
   const latest = ((await $.store.get(SETTINGS_KEY)) as Settings | undefined) ?? {}
@@ -139,6 +141,10 @@ const loadSettings = async ($: Ctx) => {
     await update($, bubbles, () => saved.bubbles!)
   }
 
+  if (typeof saved.visible === 'boolean') {
+    await update($, visible, () => saved.visible!)
+  }
+
   if (saved.emotions === 'ai' || saved.emotions === 'keywords') {
     await update($, smart, () => saved.emotions === 'ai')
   }
@@ -165,6 +171,14 @@ const setBubbles = async ($: Ctx, isOn: boolean) => {
   await saveSetting($, { bubbles: isOn })
 
   return `Pixpal speech bubbles ${isOn ? 'on' : 'off'}.`
+}
+
+// Shows or hides Pixpal in the band and keeps the choice.
+const setVisible = async ($: Ctx, isShown: boolean) => {
+  await update($, visible, () => isShown)
+  await saveSetting($, { visible: isShown })
+
+  return isShown ? 'Pixpal is back above the prompt.' : 'Pixpal is hidden. Bring it back with /pixpal show.'
 }
 
 // The setters behind /pixpal language, theme, skin and init; each says what it did.
@@ -221,6 +235,7 @@ const PICKER_QUESTIONS: Record<string, string> = {
   theme: 'Which look should the band have?',
   skin: 'Who should Pixpal be?',
   bubbles: 'Should Pixpal speak in bubbles?',
+  visible: 'Should Pixpal show above the prompt?',
   emotions: 'Who picks the emotion after each answer?',
 }
 
@@ -237,7 +252,7 @@ const directionOf = (drawn: string[], from: string, to: string) => {
   return j === (i + 1) % drawn.length ? 1 : j === (i - 1 + drawn.length) % drawn.length ? -1 : 0
 }
 
-type PickedSetting = 'language' | 'theme' | 'skin' | 'bubbles' | 'emotions'
+type PickedSetting = 'language' | 'theme' | 'skin' | 'bubbles' | 'visible' | 'emotions'
 
 // The choices of a setting, with the one it has now.
 const pickerFor = async ($: Ctx, setting: PickedSetting): Promise<Picker> => {
@@ -255,6 +270,8 @@ const pickerFor = async ($: Ctx, setting: PickedSetting): Promise<Picker> => {
       return { setting, options: Object.keys(SKINS).map(value => ({ value, label: value })), current: await read($, skin) }
     case 'bubbles':
       return { setting, options: [{ value: 'on', label: 'on' }, { value: 'off', label: 'off' }], current: (await read($, bubbles)) ? 'on' : 'off' }
+    case 'visible':
+      return { setting, options: [{ value: 'show', label: 'show' }, { value: 'hide', label: 'hide' }], current: (await read($, visible)) ? 'show' : 'hide' }
     case 'emotions':
       return {
         setting,
@@ -307,6 +324,8 @@ const applySetting = async ($: Ctx, setting: string, value: string): Promise<str
       return skinId ? setSkin($, skinId) : `Unknown skin: ${value}.`
     case 'bubbles':
       return setBubbles($, value === 'on')
+    case 'visible':
+      return setVisible($, value === 'show')
     case 'emotions':
       return setEmotions($, value === 'ai' ? 'ai' : 'keywords')
     default:
@@ -330,6 +349,7 @@ const helpText = async ($: Ctx) => {
     `- \`/pixpal theme [auto|dark|light]\`: the look; auto follows the system${now(await read($, theme))}`,
     `- \`/pixpal skin [${Object.keys(SKINS).join('|')}]\`: who the robot is${now(await read($, skin))}`,
     `- \`/pixpal bubbles [on|off]\`: speech bubbles on or off${now((await read($, bubbles)) ? 'on' : 'off')}`,
+    `- \`/pixpal show\`, \`/pixpal hide\`: Pixpal above the prompt or not; \`/pixpal visible\` picks${now((await read($, visible)) ? 'shown' : 'hidden')}`,
     `- \`/pixpal emotions [ai|keywords]\`: who picks the emotion; ai sends a short piece of each exchange to Claude Haiku on your account${now((await read($, smart)) ? 'ai' : 'keywords')}`,
     '- Without a value, a setting opens a picker.',
   ].join('\n')
@@ -599,7 +619,7 @@ export const register: Register = on => {
       name: 'pixpal',
       description: 'Set up Pixpal: its character, look, language and speech bubbles',
       // shown in gray after "/pixpal " as the person types
-      argumentHint: '[help | init | language [<name>|auto] | theme [auto|dark|light] | skin [name] | bubbles [on|off] | emotions [ai|keywords]]',
+      argumentHint: '[help | init | language [<name>|auto] | theme [auto|dark|light] | skin [name] | bubbles [on|off] | show | hide | emotions [ai|keywords]]',
     })
     activeAt = await $.clock.now()
     await syncRest($, activeAt, false)
@@ -816,6 +836,14 @@ export const register: Register = on => {
       return { text: asked ? await setTheme($, asked) : await openPicker($, name) }
     }
 
+    if (name === 'show' || name === 'hide') {
+      return { text: await setVisible($, name === 'show') }
+    }
+
+    if (name === 'visible') {
+      return { text: words[0] === 'show' || words[0] === 'hide' ? await setVisible($, words[0] === 'show') : await openPicker($, name) }
+    }
+
     if (name === 'bubbles') {
       return { text: words[0] === 'on' || words[0] === 'off' ? await setBubbles($, words[0] === 'on') : await openPicker($, name) }
     }
@@ -961,13 +989,23 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || e.surface === 'vscode' || e.surface === 'mobile') {
+    if (e.props.hasSurvey || e.surface === 'vscode' || e.surface === 'mobile' || !(await read($, visible))) {
       return next(e)
     }
 
-    const { Client } = $.ui.resolve(e)
+    const { Box, Client } = $.ui.resolve(e)
     const props = { scene: await read($, scene), seq: await read($, seq), rest: await read($, rest), debug: await read($, debug), source: await read($, source), agents: await read($, agents), maxRows: e.props.maxRows ?? 99, lang: await read($, lang), bubbles: await read($, bubbles), theme: await resolvedTheme($), skin: await read($, skin), phrases: await read($, phrasebook) }
 
-    return <Client key="pixpal" module="./client/pixpal.tsx" props={props} width={bandWidth(props.agents) + Math.max(BUBBLE_W, props.phrases ? bubbleWidthOf(Object.values(props.phrases)) : 0)} />
+    // what the mods beneath draw in the band stands to Pixpal's right, so the band is shared
+    const below = await next(e)
+
+    return (
+      <Box flexDirection="row">
+        <Client key="pixpal" module="./client/pixpal.tsx" props={props} width={bandWidth(props.agents) + Math.max(BUBBLE_W, props.phrases ? bubbleWidthOf(Object.values(props.phrases)) : 0)} />
+        <Box flexGrow={1} marginLeft={2}>
+          {below}
+        </Box>
+      </Box>
+    )
   })
 }

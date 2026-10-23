@@ -83,6 +83,7 @@ A speech bubble names each emotion ("Yay!", "Sort of", "No worries") and each ki
 | `/pixpal theme [auto\|dark\|light]` | the look; `auto` follows your system's light or dark mode |
 | `/pixpal language <name> \| auto` | the bubbles' language: any language, e.g. `french`, `japanese`; `auto` follows your prompt in Polish, English, German, Spanish, French, Italian, Portuguese, Ukrainian, Russian, Japanese, Chinese or Korean |
 | `/pixpal bubbles [on\|off]` | speech bubbles on or off |
+| `/pixpal show` \| `/pixpal hide` | Pixpal above the prompt or not; hidden, it leaves the band to other mods |
 | `/pixpal emotions [ai\|keywords]` | who picks the emotion: keyword rules (default, sends nothing) or Claude Haiku (see Privacy) |
 | `/pixpal help` | all of the above, with the current values |
 
@@ -104,6 +105,7 @@ On macOS, `theme auto` runs `defaults read -g AppleInterfaceStyle` once a minute
 ## Limitations
 
 - **A short terminal cuts Pixpal.** Pixpal draws in the band above the prompt, and Claude Code decides how many rows the band gets. In fullscreen, the band shares the bottom slot with the tasks list and the panes of other mods, and that slot takes at most half of the terminal's height. When there are fewer rows than the picture needs, Pixpal drops the least important rows first (wheels, antenna, arms) and keeps the eyes and the mouth for as long as it can. Make the window taller or close other panes to see all of it.
+- **Other mods in the band.** Mods that draw above the prompt share one band, in the order Claude Code loads them. Pixpal draws the mods that come after it to its right. A mod that comes before Pixpal and does not pass the band on hides Pixpal; use `/pixpal hide` to give the band to the other mods.
 - **Pixpal hides during a survey.** When Claude Code asks how it is doing (the 1–3 rating), the survey takes the band. Pixpal steps aside and comes back when the survey closes.
 - **No band in the VS Code extension.** Claude Code draws the band only in the terminal and the desktop app, so Pixpal does not show in the VS Code extension.
 

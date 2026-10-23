@@ -11,6 +11,8 @@ function bottom(on: On, emotion: string, onAsk: () => void = () => {}) {
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('tool.call', () => ({ result: {}, text: 'ok' }) as never)
+  // the engine's own band: empty while no survey holds it
+  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Box', children: [] }) as never)
   on('model.complete', () => {
     onAsk()
 
@@ -255,4 +257,35 @@ test('the language picker shows five rows, and the arrows scroll the whole list 
 
   await arrowTo('other')
   expect(await shown()).toEqual(['Português', 'Українська', 'Русский', '日本語', '中文'])
+})
+
+test('Pixpal shares the band: what the mods beneath draw stands beside it', async ($, on) => {
+  mock.clock(on)
+  mock.store(on, {})
+  // a mod beneath Pixpal, drawing in the band
+  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', children: ['another mod'] }) as never)
+  bottom(on, 'happy')
+  await startWith($, on)
+
+  const tree = JSON.stringify(await $.ui.render({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey: false } } as never))
+
+  expect(tree).toContain('client/pixpal.tsx')
+  expect(tree).toContain('another mod')
+})
+
+test('hidden, Pixpal leaves the band to the others, and a new session reads the choice back', async ($, on) => {
+  mock.clock(on)
+  // a session that starts with Pixpal hidden by an earlier choice
+  mock.store(on, { 'pixpal.settings': { visible: false } })
+  bottom(on, 'happy')
+  await startWith($, on)
+  const band = async () => JSON.stringify(await $.ui.render({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey: false } } as never))
+
+  expect(await band()).not.toContain('pixpal.tsx')
+
+  await $.command.run({ command: 'pixpal', args: 'show' } as never)
+  expect(await band()).toContain('pixpal.tsx')
+
+  expect((await $.command.run({ command: 'pixpal', args: 'hide' } as never)).text).toContain('/pixpal show')
+  expect(await band()).not.toContain('pixpal.tsx')
 })
