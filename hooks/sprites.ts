@@ -310,6 +310,8 @@ export type SkinId = 'robot' | 'cat' | 'claude' | 'owl' | 'ghost'
 type Skin = {
   // the two rows above the head: the robot's antenna, the cat's ears
   crown: (antenna: string) => [string, string]
+  // the same two rows on an agent's mini, 8 wide (the robot's antenna when absent)
+  miniCrown?: [string, string]
   // the chest pixels in the torso's second row
   chest: string
   // the three steps of the feet (the robot's wheels turn)
@@ -369,6 +371,7 @@ export const SKINS: Record<SkinId, Skin> = {
   // a small amber beak, wings at the sides, a pale belly and amber talons
   owl: {
     crown: () => ['.H..........H.', '..HH......HH..'],
+    miniCrown: ['H......H', '.HH..HH.'],
     chest: 'KK',
     feet: ['..k.k....k.k..', '..k.k....k.k..', '..k.k....k.k..'],
     tone: 'E',
@@ -656,11 +659,11 @@ export function halfBlock(px: string[], theme: Theme = 'dark', skin: SkinId = 'r
 export const MINI_LIMIT = 4
 const MINI_W = 8
 const MINI_GAP = 2
-const mini = (antenna: string) => [`...${antenna}${antenna}...`, '...mm...', 'HHHHHHHH', 'HKcKKcKH', 'HKKccKKH', '.GGGGGG.', '.TTTTTT.', '.ww..ww.']
+const mini = (antenna: string, skin: SkinId = 'robot') => [...(SKINS[skin].miniCrown ?? [`...${antenna}${antenna}...`, '...mm...']), 'HHHHHHHH', 'HKcKKcKH', 'HKKccKKH', '.GGGGGG.', '.TTTTTT.', '.ww..ww.']
 
 // The robot's frame widened with `count` minis; `blink` flips every few hundred ms, and each
 // mini's antenna is lit while its neighbor's is dim, so the row twinkles instead of flashing.
-export function withMinis(px: string[], count: number, blink: number): string[] {
+export function withMinis(px: string[], count: number, blink: number, skin: SkinId = 'robot'): string[] {
   const shown = Math.min(count, MINI_LIMIT)
 
   if (shown === 0) {
@@ -673,7 +676,7 @@ export function withMinis(px: string[], count: number, blink: number): string[] 
     let out = row
 
     for (let i = 0; i < shown; i++) {
-      out += '.'.repeat(MINI_GAP) + (y < top ? '.'.repeat(MINI_W) : mini((blink + i) % 2 ? 'g' : 'a')[y - top]!)
+      out += '.'.repeat(MINI_GAP) + (y < top ? '.'.repeat(MINI_W) : mini((blink + i) % 2 ? 'g' : 'a', skin)[y - top]!)
     }
 
     return out

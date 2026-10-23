@@ -142,6 +142,16 @@ test('neighboring minis blink out of step', () => {
   expect(tips).toBe('aagg')
 })
 
+test('the owl minis wear its ear tufts instead of the robot antenna', () => {
+  const top = H - 8
+  const owl = withMinis(compose({}), 1, 0, 'owl')
+  const robot = withMinis(compose({}), 1, 0)
+
+  expect(owl[top]!.slice(W + 2)).toBe('H......H')
+  expect(owl[top + 1]!.slice(W + 2)).toBe('.HH..HH.')
+  expect(robot[top]!.slice(W + 2)).toBe('...aa...')
+})
+
 test('emotions say a short line in the language the person wrote in', () => {
   expect(langOf('zrób to proszę')).toBe('pl')
   expect(langOf('ok, to działa')).toBe('pl')

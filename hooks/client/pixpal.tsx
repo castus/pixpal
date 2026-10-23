@@ -91,7 +91,7 @@ export default function MascotClient(props: Props, surface: ClientSurface<State>
 
   const frames = animOf(st.scene).frames
   const skin = props.skin ?? 'robot'
-  const full = halfBlock(withMinis(framePx(frames[Math.min(st.fi, frames.length - 1)]!, skin), props.agents ?? 0, st.blink), props.theme ?? 'dark', skin)
+  const full = halfBlock(withMinis(framePx(frames[Math.min(st.fi, frames.length - 1)]!, skin), props.agents ?? 0, st.blink, skin), props.theme ?? 'dark', skin)
   const overflow = (props.agents ?? 0) - MINI_LIMIT
 
   // the agents beyond the drawn minis, as plain text next to the last one
