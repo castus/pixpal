@@ -103,7 +103,9 @@ On macOS, `theme auto` runs `defaults read -g AppleInterfaceStyle` once a minute
 
 ## Limitations
 
-TBD
+- **A short terminal cuts Pixpal.** Pixpal draws in the band above the prompt, and Claude Code decides how many rows the band gets. In fullscreen, the band shares the bottom slot with the tasks list and the panes of other mods, and that slot takes at most half of the terminal's height. When there are fewer rows than the picture needs, Pixpal drops the least important rows first (wheels, antenna, arms) and keeps the eyes and the mouth for as long as it can. Make the window taller or close other panes to see all of it.
+- **Pixpal hides during a survey.** When Claude Code asks how it is doing (the 1–3 rating), the survey takes the band. Pixpal steps aside and comes back when the survey closes.
+- **No band in the VS Code extension.** Claude Code draws the band only in the terminal and the desktop app, so Pixpal does not show in the VS Code extension.
 
 ## Contributing
 
