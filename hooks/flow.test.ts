@@ -156,3 +156,103 @@ test('a resumed session gets its own choices back, ahead of the latest ones', as
 
   expect(JSON.stringify(await $.ui.render({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey: false } } as never))).toContain('"skin":"owl"')
 })
+
+test('a setting without a value opens the picker, and a key pick sets it', async ($, on) => {
+  mock.clock(on)
+  mock.store(on, {})
+  bottom(on, 'happy')
+  const opened: string[] = []
+  const closed: string[] = []
+  on('ui.open', (_$, e) => {
+    opened.push(e.id)
+
+    return { value: { isPlaced: true } } as never
+  })
+  on('ui.close', (_$, e) => {
+    closed.push(e.id)
+
+    return { value: undefined } as never
+  })
+  on('ui.toast', () => ({ value: undefined }) as never)
+  await startWith($, on)
+
+  expect((await $.command.run({ command: 'pixpal', args: 'theme' } as never)).text).toBe('Pick the theme in the pane.')
+  expect(opened).toEqual(['pixpal-picker'])
+
+  // auto, dark, light: one row each
+  const pane = await $.ui.mount({ plugin: 'pixpal', surface: 'terminal', component: 'Pane', props: {} as never, requestId: 'pixpal-picker' })
+  expect((await pane.findAll({ type: 'Button' })).map(row => row.text)).toEqual(['1. Auto (follows the system)  ✓', '2. dark', '3. light'])
+  await pane.press({ key: 'slot:2' })
+
+  expect(closed).toEqual(['pixpal-picker'])
+  expect(JSON.stringify(await $.ui.render({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey: false } } as never))).toContain('"theme":"light"')
+})
+
+test('a setting with a value is set at once, without the picker', async ($, on) => {
+  mock.clock(on)
+  mock.store(on, {})
+  bottom(on, 'happy')
+  const opened: string[] = []
+  on('ui.open', (_$, e) => {
+    opened.push(e.id)
+
+    return { value: { isPlaced: true } } as never
+  })
+  await startWith($, on)
+
+  expect((await $.command.run({ command: 'pixpal', args: 'skin owl' } as never)).text).toContain('Pixpal skin: owl')
+  expect((await $.command.run({ command: 'pixpal', args: 'language de' } as never)).text).toContain('Fertig!')
+  expect(opened).toEqual([])
+})
+
+test('the language picker shows five rows, and the arrows scroll the whole list under the focus', async ($, on) => {
+  mock.clock(on)
+  mock.store(on, {})
+  bottom(on, 'happy')
+  on('ui.open', () => ({ value: { isPlaced: true } }) as never)
+  // the ring itself: lands where the chain aims it
+  on('ui.focus', () => ({}) as never)
+  await startWith($, on)
+
+  await $.command.run({ command: 'pixpal', args: 'language' } as never)
+  const pane = await $.ui.mount({ plugin: 'pixpal', surface: 'terminal', component: 'Pane', props: {} as never, requestId: 'pixpal-picker' })
+  const shown = async () => (await pane.findAll({ type: 'Button' })).map(row => row.text?.replace('  ✓', '').replace(/^ ?\d+\. /, ''))
+  const arrowTo = (element: string) => $.ui.focus({ component: 'Pane', requestId: 'pixpal-picker', element, origin: { kind: 'person' } } as never)
+
+  // auto is the current language: the list starts at the top, the field below it
+  expect(await shown()).toEqual(['Auto (the language of your prompt)', 'Polski', 'English', 'Deutsch', 'Español'])
+  expect(await pane.find({ key: 'other' })).toBeDefined()
+  expect(JSON.stringify(await pane.drawn())).toContain('Which language should Pixpal speak?')
+  expect((await pane.find({ key: 'slot:0' }))?.text).toBe(' 1. Auto (the language of your prompt)  ✓')
+
+  await $.ui.focus({ component: 'Pane', requestId: 'pixpal-picker', element: 'slot:0', origin: { kind: 'plugin', name: 'pixpal' } } as never)
+  for (const element of ['slot:1', 'slot:2', 'slot:3', 'slot:4']) {
+    await arrowTo(element)
+  }
+
+  // down from the last slot: the ring aims at the field, the options move up one instead
+  await arrowTo('other')
+  expect(await shown()).toEqual(['Polski', 'English', 'Deutsch', 'Español', 'Français'])
+
+  // down to the end of the list, then the field
+  for (let i = 0; i < 8; i++) {
+    await arrowTo('other')
+  }
+
+  expect(await shown()).toEqual(['Українська', 'Русский', '日本語', '中文', '한국어'])
+  await arrowTo('other')
+  // down from the field wraps to the list's start
+  await arrowTo('slot:0')
+  expect(await shown()).toEqual(['Auto (the language of your prompt)', 'Polski', 'English', 'Deutsch', 'Español'])
+
+  // up from the field shows the list's end; up from the first slot scrolls back
+  await arrowTo('other')
+  await arrowTo('slot:4')
+  expect(await shown()).toEqual(['Українська', 'Русский', '日本語', '中文', '한국어'])
+  for (const element of ['slot:3', 'slot:2', 'slot:1', 'slot:0']) {
+    await arrowTo(element)
+  }
+
+  await arrowTo('other')
+  expect(await shown()).toEqual(['Português', 'Українська', 'Русский', '日本語', '中文'])
+})

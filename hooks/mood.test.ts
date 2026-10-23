@@ -4,7 +4,7 @@ import { answerWindow, buildClassifierPrompt, EMOTIONS, parseEmotion } from './c
 import { FIXTURES } from './fixtures.ts'
 import { GOLDEN } from './golden.ts'
 import { draftAfter, isTestCommand, restForDate, sceneForAnswer, sceneForCommand, sceneForExchange, sceneForTool } from './mood.ts'
-import { BUBBLE_W, cellWidth, DOT_MS, ENGLISH_LINES, langOf, parseTranslation, SAYINGS, shownText, TYPE_MS, withBubble, WORK_SAYINGS } from './sayings.ts'
+import { BUBBLE_W, builtInBook, cellWidth, DOT_MS, ENGLISH_LINES, LANGS, langOf, parseTranslation, SAYINGS, shownText, TYPE_MS, withBubble, WORK_SAYINGS } from './sayings.ts'
 import { ANIMS, durationOfScene } from './scenes.ts'
 import { bandWidth, compose, framePx, SKINS, systemThemeOf, fitRows, FRAME_W, halfBlock, MINI_LIMIT, PALETTE, H, W, withMinis } from './sprites.ts'
 
@@ -146,16 +146,36 @@ test('emotions say a short line in the language the person wrote in', () => {
   expect(langOf('zrób to proszę')).toBe('pl')
   expect(langOf('ok, to działa')).toBe('pl')
   expect(langOf('please run the tests')).toBe('en')
+  expect(langOf('go to the store')).toBe('en')
+  expect(langOf('Bitte führe die Tests aus')).toBe('de')
+  expect(langOf('¿Por qué no funciona?')).toBe('es')
+  expect(langOf('je ne sais pas pourquoi ça plante')).toBe('fr')
+  expect(langOf('perché non funziona il test?')).toBe('it')
+  expect(langOf('você pode corrigir isso?')).toBe('pt')
+  expect(langOf('Виправ цю помилку, будь ласка')).toBe('uk')
+  expect(langOf('Исправь эту ошибку, пожалуйста')).toBe('ru')
+  expect(langOf('テストを実行してください')).toBe('ja')
+  expect(langOf('请运行测试')).toBe('zh')
+  expect(langOf('테스트를 실행해 주세요')).toBe('ko')
   for (const id of EMOTIONS) {
-    expect(SAYINGS[id]?.pl.length).toBeGreaterThan(0)
-    expect(SAYINGS[id]?.en.length).toBeGreaterThan(0)
+    for (const lang of LANGS) {
+      expect(SAYINGS[id]?.[lang].length).toBeGreaterThan(0)
+    }
   }
+})
+
+test('a built-in language is found by its code or name and needs no translation', () => {
+  expect(builtInBook('de')?.happy).toBe('Fertig!')
+  expect(builtInBook('German')?.thinking).toBe('Denke nach…')
+  expect(builtInBook(' 日本語 ')?.happy).toBe('できた！')
+  expect(Object.keys(builtInBook('french')!).sort()).toEqual(Object.keys(ENGLISH_LINES).sort())
+  expect(builtInBook('klingon')).toBeUndefined()
 })
 
 test('the bubble stands beside the band and adds at most BUBBLE_W columns', () => {
   const width = (row: Array<{ text: string }>) => row.reduce((n, s) => n + [...s.text].length, 0)
   const band = halfBlock(compose({}))
-  const lines = [...Object.values(SAYINGS), ...Object.values(WORK_SAYINGS)].flatMap(s => [s.pl, s.en])
+  const lines = [...Object.values(SAYINGS), ...Object.values(WORK_SAYINGS)].flatMap(s => Object.values(s))
   const longest = Math.max(...lines.map(text => Math.max(...withBubble(band, text).map(width))))
 
   expect(withBubble(band, 'Jupii!')).toHaveLength(band.length)
@@ -163,10 +183,11 @@ test('the bubble stands beside the band and adds at most BUBBLE_W columns', () =
   expect(withBubble(band.slice(0, 2), 'Jupii!')).toHaveLength(2)
 })
 
-test('every work scene has a plain line in both languages', () => {
+test('every work scene has a plain line in every built-in language', () => {
   for (const scene of ['thinking', 'read', 'lens', 'type', 'run', 'checklist', 'stamp', 'git', 'plan', 'ask']) {
-    expect(WORK_SAYINGS[scene]?.pl.length).toBeGreaterThan(0)
-    expect(WORK_SAYINGS[scene]?.en.length).toBeGreaterThan(0)
+    for (const lang of LANGS) {
+      expect(WORK_SAYINGS[scene]?.[lang].length).toBeGreaterThan(0)
+    }
   }
 })
 

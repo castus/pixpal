@@ -81,10 +81,12 @@ A speech bubble names each emotion ("Yay!", "Sort of", "No worries") and each ki
 | `/pixpal init` | set everything up |
 | `/pixpal skin [robot\|cat\|claude\|owl\|ghost]` | who Pixpal is |
 | `/pixpal theme [auto\|dark\|light]` | the look; `auto` follows your system's light or dark mode |
-| `/pixpal language <name> \| auto` | the bubbles' language: any language, e.g. `french`, `japanese`; `auto` uses Polish or English after your prompt |
-| `/pixpal bubbles` | speech bubbles on or off |
+| `/pixpal language <name> \| auto` | the bubbles' language: any language, e.g. `french`, `japanese`; `auto` follows your prompt in Polish, English, German, Spanish, French, Italian, Portuguese, Ukrainian, Russian, Japanese, Chinese or Korean |
+| `/pixpal bubbles [on\|off]` | speech bubbles on or off |
 | `/pixpal emotions [ai\|keywords]` | who picks the emotion: keyword rules (default, sends nothing) or Claude Haiku (see Privacy) |
 | `/pixpal help` | all of the above, with the current values |
+
+Give a setting without a value (`/pixpal language`) to pick it from a list: ↑↓ move, Enter picks, Esc closes. In the language list, the last row takes any language you type.
 
 Each conversation keeps its own choices, so a resumed session comes back with the same character. A new session starts from your latest choices.
 
@@ -95,7 +97,7 @@ Pixpal runs inside Claude Code and makes no network calls of its own. By default
 Two features use Claude Code's own model access, only when you turn them on. They go through the same client, account and provider as your conversation (Anthropic, Amazon Bedrock or Google Vertex, under the same terms):
 
 - **Emotions, with `/pixpal emotions ai`:** after each answer, the first 500 characters of your message and the opening and closing of Claude's answer (300 + 200 characters when it is long) go to Claude Haiku, which names one emotion. About 900 tokens per answer. If Haiku is blocked or does not answer, the keyword rules take over. Aborted or empty turns never call the model.
-- **Languages, with `/pixpal language <name>`:** the first time you choose a named language, the built-in English bubble lines (not your conversation) are translated once by Claude Haiku and kept on your machine. `auto` uses the built-in Polish and English lines and sends nothing.
+- **Languages, with `/pixpal language <name>`:** the first time you choose a language without built-in lines, the built-in English bubble lines (not your conversation) are translated once by Claude Haiku and kept on your machine. `auto` and the twelve built-in languages send nothing.
 
 On macOS, `theme auto` runs `defaults read -g AppleInterfaceStyle` once a minute to read your system's appearance.
 

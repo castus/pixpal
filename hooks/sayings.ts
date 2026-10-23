@@ -3,32 +3,112 @@
 // minis stay silent.
 import type { Span } from './sprites.ts'
 
-export type Lang = 'pl' | 'en'
+// The languages with built-in lines; `auto` picks one of them after the person's prompt.
+export const LANGS = ['pl', 'en', 'de', 'es', 'fr', 'it', 'pt', 'uk', 'ru', 'ja', 'zh', 'ko'] as const
+export type Lang = (typeof LANGS)[number]
 
-export const SAYINGS: Record<string, Record<Lang, string>> = {
-  happy: { pl: 'Gotowe!', en: 'Done!' },
-  cheer: { pl: 'Jupii!', en: 'Yay!' },
-  yes: { pl: 'Tak!', en: 'Yes!' },
-  no: { pl: 'Nie…', en: 'Nope' },
-  praise: { pl: 'Brawo!', en: 'Nice!' },
-  soso: { pl: 'Tak sobie', en: 'Sort of' },
-  shrug: { pl: 'Hmm…', en: 'Dunno' },
-  ponder: { pl: 'I jak?', en: 'Well?' },
-  stop: { pl: 'Stój!', en: 'Wait!' },
-  contrite: { pl: 'Sorki…', en: 'Oops, sorry' },
-  shy: { pl: 'Och, dzięki', en: 'Aw, thanks' },
-  relieved: { pl: 'Luzik', en: 'No worries' },
-  oops: { pl: 'Ups!', en: 'Oops!' },
-  surprised: { pl: 'Ojej!', en: 'Whoa!' },
-  hello: { pl: 'Cześć!', en: 'Hi!' },
-  ufff: { pl: 'Uff…', en: 'Phew…' },
+// The names a built-in language answers to in /pixpal language, besides its code.
+const LANG_NAMES: Record<Lang, string[]> = {
+  pl: ['polish', 'polski'],
+  en: ['english'],
+  de: ['german', 'deutsch'],
+  es: ['spanish', 'español', 'espanol'],
+  fr: ['french', 'français', 'francais'],
+  it: ['italian', 'italiano'],
+  pt: ['portuguese', 'português', 'portugues'],
+  uk: ['ukrainian', 'українська'],
+  ru: ['russian', 'русский'],
+  ja: ['japanese', '日本語'],
+  zh: ['chinese', '中文'],
+  ko: ['korean', '한국어'],
 }
 
-const POLISH_LETTERS = /[ąćęłńóśźż]/i
-const POLISH_WORDS = /(^|[^a-ząćęłńóśźż])(nie|tak|jest|czy|się|jak|co|to|już|może|dzięki|zrób|ok,? to)(?![a-ząćęłńóśźż])/i
+// Each built-in language under its own name, as the language picker lists it.
+export const LANG_LABELS: Record<Lang, string> = {
+  pl: 'Polski',
+  en: 'English',
+  de: 'Deutsch',
+  es: 'Español',
+  fr: 'Français',
+  it: 'Italiano',
+  pt: 'Português',
+  uk: 'Українська',
+  ru: 'Русский',
+  ja: '日本語',
+  zh: '中文',
+  ko: '한국어',
+}
 
-// The person's language, from the message they sent: the robot answers in kind.
-export const langOf = (text: string): Lang => (POLISH_LETTERS.test(text) || POLISH_WORDS.test(text) ? 'pl' : 'en')
+// Every line fits in 16 terminal columns once "…" is spelled as three dots (BUBBLE_W).
+export const SAYINGS: Record<string, Record<Lang, string>> = {
+  happy: { pl: 'Gotowe!', en: 'Done!', de: 'Fertig!', es: '¡Listo!', fr: 'Fini !', it: 'Fatto!', pt: 'Pronto!', uk: 'Готово!', ru: 'Готово!', ja: 'できた！', zh: '完成！', ko: '완료!' },
+  cheer: { pl: 'Jupii!', en: 'Yay!', de: 'Juhu!', es: '¡Yupi!', fr: 'Youpi !', it: 'Evviva!', pt: 'Eba!', uk: 'Ура!', ru: 'Ура!', ja: 'やった！', zh: '耶！', ko: '야호!' },
+  yes: { pl: 'Tak!', en: 'Yes!', de: 'Ja!', es: '¡Sí!', fr: 'Oui !', it: 'Sì!', pt: 'Sim!', uk: 'Так!', ru: 'Да!', ja: 'はい！', zh: '是的！', ko: '네!' },
+  no: { pl: 'Nie…', en: 'Nope', de: 'Nö…', es: 'Nop…', fr: 'Non…', it: 'No…', pt: 'Não…', uk: 'Ні…', ru: 'Нет…', ja: 'いいえ…', zh: '不行…', ko: '아니…' },
+  praise: { pl: 'Brawo!', en: 'Nice!', de: 'Super!', es: '¡Genial!', fr: 'Bravo !', it: 'Bravo!', pt: 'Boa!', uk: 'Клас!', ru: 'Класс!', ja: 'いいね！', zh: '真棒！', ko: '멋져!' },
+  soso: { pl: 'Tak sobie', en: 'Sort of', de: 'Naja', es: 'Más o menos', fr: 'Bof', it: 'Così così', pt: 'Mais ou menos', uk: 'Так собі', ru: 'Так себе', ja: 'まあまあ', zh: '还行', ko: '그럭저럭' },
+  shrug: { pl: 'Hmm…', en: 'Dunno', de: 'Keine Ahnung', es: 'Ni idea', fr: 'Aucune idée', it: 'Boh', pt: 'Sei lá', uk: 'Хтозна', ru: 'Не знаю', ja: 'さあ…', zh: '不知道', ko: '글쎄…' },
+  ponder: { pl: 'I jak?', en: 'Well?', de: 'Und?', es: '¿Y bien?', fr: 'Alors ?', it: 'E allora?', pt: 'E aí?', uk: 'І як?', ru: 'И как?', ja: 'で？', zh: '然后呢？', ko: '그래서?' },
+  stop: { pl: 'Stój!', en: 'Wait!', de: 'Halt!', es: '¡Espera!', fr: 'Attends !', it: 'Aspetta!', pt: 'Espera!', uk: 'Стій!', ru: 'Стой!', ja: '待って！', zh: '等等！', ko: '잠깐!' },
+  contrite: { pl: 'Sorki…', en: 'Oops, sorry', de: 'Sorry…', es: 'Perdón…', fr: 'Pardon…', it: 'Scusa…', pt: 'Desculpa…', uk: 'Вибач…', ru: 'Прости…', ja: 'ごめん…', zh: '抱歉…', ko: '미안…' },
+  shy: { pl: 'Och, dzięki', en: 'Aw, thanks', de: 'Oh, danke', es: 'Ay, gracias', fr: 'Oh, merci', it: 'Oh, grazie', pt: 'Ah, valeu', uk: 'Ой, дякую', ru: 'Ой, спасибо', ja: 'えへへ', zh: '谢谢啦', ko: '고마워' },
+  relieved: { pl: 'Luzik', en: 'No worries', de: 'Kein Stress', es: 'Tranqui', fr: 'Tranquille', it: 'Tranquillo', pt: 'Tranquilo', uk: 'Спокійно', ru: 'Спокойно', ja: '大丈夫', zh: '没事', ko: '괜찮아' },
+  oops: { pl: 'Ups!', en: 'Oops!', de: 'Hoppla!', es: '¡Uy!', fr: 'Oups !', it: 'Ops!', pt: 'Opa!', uk: 'Ой!', ru: 'Ой!', ja: 'おっと！', zh: '哎呀！', ko: '앗!' },
+  surprised: { pl: 'Ojej!', en: 'Whoa!', de: 'Wow!', es: '¡Guau!', fr: 'Oh là là !', it: 'Wow!', pt: 'Uau!', uk: 'Овва!', ru: 'Ого!', ja: 'わあ！', zh: '哇！', ko: '와!' },
+  hello: { pl: 'Cześć!', en: 'Hi!', de: 'Hallo!', es: '¡Hola!', fr: 'Salut !', it: 'Ciao!', pt: 'Oi!', uk: 'Привіт!', ru: 'Привет!', ja: 'やあ！', zh: '你好！', ko: '안녕!' },
+  ufff: { pl: 'Uff…', en: 'Phew…', de: 'Puh…', es: 'Uf…', fr: 'Ouf…', it: 'Uff…', pt: 'Ufa…', uk: 'Фух…', ru: 'Фух…', ja: 'ふう…', zh: '呼…', ko: '휴…' },
+}
+
+// Latin-script languages: letters only that language uses, and its most common short words.
+// English comes first, so a tie (or nothing found) stays English.
+const LATIN: Array<[Lang, RegExp | undefined, Set<string>]> = [
+  ['en', undefined, new Set(['the', 'is', 'are', 'and', 'to', 'it', 'this', 'that', 'please', 'what', 'you', 'of', 'for', 'with', 'can', 'why', 'how'])],
+  ['pl', /[ąćęłńśźż]/i, new Set(['nie', 'tak', 'jest', 'czy', 'się', 'jak', 'co', 'to', 'już', 'może', 'dzięki', 'zrób', 'proszę', 'dlaczego'])],
+  ['de', /[äöüß]/i, new Set(['und', 'ist', 'nicht', 'das', 'die', 'der', 'ich', 'bitte', 'mit', 'warum', 'wie', 'ein', 'eine', 'es'])],
+  ['es', /[ñ¿¡]/i, new Set(['el', 'la', 'los', 'las', 'que', 'es', 'por', 'para', 'una', 'con', 'qué', 'cómo', 'gracias', 'está', 'hazlo'])],
+  ['fr', /[œëîïûù]/i, new Set(['le', 'la', 'les', 'est', 'et', 'je', 'pas', 'une', 'des', 'pour', 'avec', 'ça', 'merci', 'pourquoi', 'ne'])],
+  ['it', /[ìò]/i, new Set(['il', 'che', 'è', 'non', 'per', 'una', 'sono', 'con', 'grazie', 'perché', 'cosa', 'gli', 'della'])],
+  ['pt', /[ãõ]/i, new Set(['o', 'os', 'que', 'não', 'é', 'um', 'uma', 'para', 'com', 'obrigado', 'você', 'isso', 'está'])],
+]
+
+// Ukrainian words Russian does not have, for a line without і, ї, є or ґ.
+const UKRAINIAN_WORDS = /(?<!\p{L})(це|цю|що|як|чому|ласка)(?!\p{L})/iu
+
+// The person's language, from the message they sent: the robot answers in kind. The script
+// tells Korean, Japanese, Chinese and Cyrillic at once; a Latin language scores its letters
+// and words.
+export function langOf(text: string): Lang {
+  if (/[ᄀ-ᇿ㄰-㆏가-힣]/.test(text)) {
+    return 'ko'
+  }
+
+  if (/[぀-ヿ]/.test(text)) {
+    return 'ja'
+  }
+
+  if (/[一-鿿]/.test(text)) {
+    return 'zh'
+  }
+
+  if (/[Ѐ-ӿ]/.test(text)) {
+    return /[іїєґ]/i.test(text) || UKRAINIAN_WORDS.test(text) ? 'uk' : 'ru'
+  }
+
+  const words = text.toLowerCase().match(/\p{L}+/gu) ?? []
+  let best: Lang = 'en'
+  let top = 0
+
+  for (const [lang, letters, common] of LATIN) {
+    const score = (letters?.test(text) ? 3 : 0) + words.filter(word => common.has(word)).length
+
+    if (score > top) {
+      best = lang
+      top = score
+    }
+  }
+
+  return best
+}
 
 // The bubble fades from white at the top to a cool light gray at the bottom, one color per
 // half-row; the text row sits in the middle shade.
@@ -198,29 +278,38 @@ export const WORK_SPEAKS = true
 // line naming the call's target ("Czytam mood.ts") was tried and dropped: it changed too
 // fast to read.
 export const WORK_SAYINGS: Record<string, Record<Lang, string>> = {
-  thinking: { pl: 'Myślę…', en: 'Thinking…' },
-  read: { pl: 'Czytam…', en: 'Reading…' },
-  lens: { pl: 'Szukam…', en: 'Searching…' },
-  type: { pl: 'Piszę…', en: 'Writing…' },
-  run: { pl: 'Odpalam…', en: 'Running…' },
-  checklist: { pl: 'Testuję…', en: 'Testing…' },
-  stamp: { pl: 'Testuję…', en: 'Testing…' },
-  git: { pl: 'Git…', en: 'Git…' },
-  plan: { pl: 'Planuję…', en: 'Planning…' },
-  idea: { pl: 'Uczę się…', en: 'Learning…' },
-  send: { pl: 'Wysyłam…', en: 'Sending…' },
-  ask: { pl: 'Pytanie!', en: 'Question!' },
-  clock: { pl: 'Ustawiam czas…', en: 'Scheduling…' },
-  bell: { pl: 'Dzwonię!', en: 'Ping!' },
-  paint: { pl: 'Rysuję…', en: 'Drawing…' },
-  door: { pl: 'Przechodzę…', en: 'Switching…' },
-  juggle: { pl: 'Deleguję…', en: 'Delegating…' },
+  thinking: { pl: 'Myślę…', en: 'Thinking…', de: 'Denke nach…', es: 'Pensando…', fr: 'Je réfléchis…', it: 'Penso…', pt: 'Pensando…', uk: 'Думаю…', ru: 'Думаю…', ja: '考え中…', zh: '思考中…', ko: '생각 중…' },
+  read: { pl: 'Czytam…', en: 'Reading…', de: 'Lese…', es: 'Leyendo…', fr: 'Je lis…', it: 'Leggo…', pt: 'Lendo…', uk: 'Читаю…', ru: 'Читаю…', ja: '読んでる…', zh: '阅读中…', ko: '읽는 중…' },
+  lens: { pl: 'Szukam…', en: 'Searching…', de: 'Suche…', es: 'Buscando…', fr: 'Je cherche…', it: 'Cerco…', pt: 'Buscando…', uk: 'Шукаю…', ru: 'Ищу…', ja: '探してる…', zh: '搜索中…', ko: '찾는 중…' },
+  type: { pl: 'Piszę…', en: 'Writing…', de: 'Schreibe…', es: 'Escribiendo…', fr: "J'écris…", it: 'Scrivo…', pt: 'Escrevendo…', uk: 'Пишу…', ru: 'Пишу…', ja: '書いてる…', zh: '编写中…', ko: '쓰는 중…' },
+  run: { pl: 'Odpalam…', en: 'Running…', de: 'Starte…', es: 'Ejecutando…', fr: 'Je lance…', it: 'Avvio…', pt: 'Executando…', uk: 'Запускаю…', ru: 'Запускаю…', ja: '実行中…', zh: '运行中…', ko: '실행 중…' },
+  checklist: { pl: 'Testuję…', en: 'Testing…', de: 'Teste…', es: 'Probando…', fr: 'Je teste…', it: 'Testo…', pt: 'Testando…', uk: 'Тестую…', ru: 'Тестирую…', ja: 'テスト中…', zh: '测试中…', ko: '테스트 중…' },
+  stamp: { pl: 'Testuję…', en: 'Testing…', de: 'Teste…', es: 'Probando…', fr: 'Je teste…', it: 'Testo…', pt: 'Testando…', uk: 'Тестую…', ru: 'Тестирую…', ja: 'テスト中…', zh: '测试中…', ko: '테스트 중…' },
+  git: { pl: 'Git…', en: 'Git…', de: 'Git…', es: 'Git…', fr: 'Git…', it: 'Git…', pt: 'Git…', uk: 'Git…', ru: 'Git…', ja: 'Git…', zh: 'Git…', ko: 'Git…' },
+  plan: { pl: 'Planuję…', en: 'Planning…', de: 'Plane…', es: 'Planeando…', fr: 'Je planifie…', it: 'Pianifico…', pt: 'Planejando…', uk: 'Планую…', ru: 'Планирую…', ja: '計画中…', zh: '规划中…', ko: '계획 중…' },
+  idea: { pl: 'Uczę się…', en: 'Learning…', de: 'Lerne…', es: 'Aprendiendo…', fr: "J'apprends…", it: 'Imparo…', pt: 'Aprendendo…', uk: 'Вчуся…', ru: 'Учусь…', ja: '学習中…', zh: '学习中…', ko: '배우는 중…' },
+  send: { pl: 'Wysyłam…', en: 'Sending…', de: 'Sende…', es: 'Enviando…', fr: "J'envoie…", it: 'Invio…', pt: 'Enviando…', uk: 'Надсилаю…', ru: 'Отправляю…', ja: '送信中…', zh: '发送中…', ko: '보내는 중…' },
+  ask: { pl: 'Pytanie!', en: 'Question!', de: 'Frage!', es: '¡Pregunta!', fr: 'Question !', it: 'Domanda!', pt: 'Pergunta!', uk: 'Питання!', ru: 'Вопрос!', ja: '質問！', zh: '提问！', ko: '질문!' },
+  clock: { pl: 'Ustawiam czas…', en: 'Scheduling…', de: 'Plane Zeit…', es: 'Programando…', fr: 'Je programme…', it: 'Programmo…', pt: 'Agendando…', uk: 'Ставлю таймер…', ru: 'Ставлю таймер…', ja: '予約中…', zh: '定时中…', ko: '예약 중…' },
+  bell: { pl: 'Dzwonię!', en: 'Ping!', de: 'Ping!', es: '¡Ping!', fr: 'Ding !', it: 'Din don!', pt: 'Plim!', uk: 'Дзень!', ru: 'Дзынь!', ja: 'ピンポーン！', zh: '叮！', ko: '딩동!' },
+  paint: { pl: 'Rysuję…', en: 'Drawing…', de: 'Zeichne…', es: 'Dibujando…', fr: 'Je dessine…', it: 'Disegno…', pt: 'Desenhando…', uk: 'Малюю…', ru: 'Рисую…', ja: '描いてる…', zh: '绘图中…', ko: '그리는 중…' },
+  door: { pl: 'Przechodzę…', en: 'Switching…', de: 'Wechsle…', es: 'Cambiando…', fr: 'Je change…', it: 'Cambio…', pt: 'Trocando…', uk: 'Перемикаю…', ru: 'Переключаю…', ja: '切り替え中…', zh: '切换中…', ko: '전환 중…' },
+  juggle: { pl: 'Deleguję…', en: 'Delegating…', de: 'Delegiere…', es: 'Delegando…', fr: 'Je délègue…', it: 'Delego…', pt: 'Delegando…', uk: 'Делегую…', ru: 'Делегирую…', ja: '任せてる…', zh: '委派中…', ko: '위임 중…' },
 }
 
 // The widest bubble any saying (emotion or work) needs past the picture, in terminal
 // columns: the gap column, two spaces of padding each side, the text, and the shadow column.
 export const bubbleWidthOf = (lines: string[]) => Math.max(0, ...lines.map(line => cellWidth(spelled(line)))) + 6
-export const BUBBLE_W = bubbleWidthOf([...Object.values(SAYINGS), ...Object.values(WORK_SAYINGS)].flatMap(s => [s.pl, s.en]))
+export const BUBBLE_W = bubbleWidthOf([...Object.values(SAYINGS), ...Object.values(WORK_SAYINGS)].flatMap(s => Object.values(s)))
+
+// The built-in lines of a language named in /pixpal language ('german', 'Deutsch' or 'de'),
+// as a phrasebook by scene id; undefined for a language without built-in lines.
+export function builtInBook(name: string): Record<string, string> | undefined {
+  const key = name.trim().toLowerCase()
+  const lang = LANGS.find(code => code === key || LANG_NAMES[code].includes(key))
+
+  return lang && Object.fromEntries([...Object.entries(SAYINGS), ...Object.entries(WORK_SAYINGS)].map(([id, line]) => [id, line[lang]]))
+}
 
 // Any other language: the English lines are translated once by a small model and kept.
 // A translated line is cut to TRANSLATED_MAX columns and keeps the ellipsis of its source.

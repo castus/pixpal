@@ -1,10 +1,11 @@
 // Draws every Pixpal scene in a grid, each labelled with its id, in a true-color
 // terminal. Scenes animate in place until Ctrl+C; --still prints one frame and exits;
-// --pl or --en adds the speech bubble each emotion or work scene says, in that language;
+// --pl, --en, --de or any built-in language's code adds the speech bubble each emotion or
+// work scene says, in that language;
 // --light draws the light theme; --cat (or any skin's name) draws that skin.
 //
-//   node --experimental-strip-types tools/gallery.ts [--still] [--light] [--<skin>] [--pl | --en] [filter]
-import { BUBBLE_W, SAYINGS, withBubble, WORK_SAYINGS, type Lang } from '../hooks/sayings.ts'
+//   node --experimental-strip-types tools/gallery.ts [--still] [--light] [--<skin>] [--<lang>] [filter]
+import { BUBBLE_W, LANGS, SAYINGS, withBubble, WORK_SAYINGS } from '../hooks/sayings.ts'
 import { ANIMS } from '../hooks/scenes.ts'
 import { FRAME_W, frameIndex, framePx, halfBlock, SKINS, type SkinId, type Span, type Theme } from '../hooks/sprites.ts'
 
@@ -15,7 +16,7 @@ const isStill = args.includes('--still')
 const theme: Theme = args.includes('--light') ? 'light' : 'dark'
 // --<skin> (e.g. --cat) draws every scene as that skin
 const skin = (Object.keys(SKINS) as SkinId[]).find(id => args.includes(`--${id}`)) ?? 'robot'
-const lang: Lang | undefined = args.includes('--pl') ? 'pl' : args.includes('--en') ? 'en' : undefined
+const lang = LANGS.find(code => args.includes(`--${code}`))
 const filter = args.find(arg => !arg.startsWith('--')) ?? ''
 // with a language, only the scenes that speak
 const sayingOf = (id: string) => SAYINGS[id] ?? WORK_SAYINGS[id]

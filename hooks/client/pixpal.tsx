@@ -28,7 +28,7 @@ const durationOf = (scene: string) => animOf(scene).frames.reduce((sum, fr) => s
 
 // The line a scene says, if any. Props from an older hooks module (during a reload) may lack
 // lang, agents or maxRows.
-// A chosen language's phrasebook (phrases) wins over the built-in Polish and English.
+// A chosen language's phrasebook (phrases) wins over the line in the prompt's language.
 const sayingOf = (scene: string, props: Props) => {
   const known = props.bubbles === false ? undefined : (SAYINGS[scene] ?? (WORK_SPEAKS ? WORK_SAYINGS[scene] : undefined))
 

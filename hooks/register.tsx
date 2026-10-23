@@ -5,7 +5,7 @@ import { FIXTURES } from './fixtures.ts'
 import { buildClassifierPrompt, CLASSIFIER_SYSTEM, parseEmotion } from './classifier.ts'
 import { draftAfter, restForDate, sceneForExchange, sceneForTool } from './mood.ts'
 import { durationOfScene, isOnce, SCENES } from './scenes.ts'
-import { BUBBLE_W, bubbleWidthOf, buildTranslatePrompt, langOf, parseTranslation, TRANSLATE_SYSTEM } from './sayings.ts'
+import { BUBBLE_W, bubbleWidthOf, buildTranslatePrompt, builtInBook, LANG_LABELS, LANGS, langOf, parseTranslation, TRANSLATE_SYSTEM, type Lang } from './sayings.ts'
 import { bandWidth, SKINS, systemThemeOf, type SkinId } from './sprites.ts'
 
 const scene = atom({ plugin: 'pixpal', key: 'scene' } as const, 'idle')
@@ -27,19 +27,26 @@ const smart = atom({ plugin: 'pixpal', key: 'smart' } as const, false)
 // How many agents run now; each one stands beside the robot as a mini robot.
 const agents = atom({ plugin: 'pixpal', key: 'agents' } as const, 0)
 // The person's language, from their last prompt; emotions speak it in a bubble.
-const lang = atom({ plugin: 'pixpal', key: 'lang' } as const, 'en' as 'pl' | 'en')
+const lang = atom({ plugin: 'pixpal', key: 'lang' } as const, 'en' as Lang)
 // Whether the robot speaks in bubbles at all (emotions and work); /pixpal bubbles toggles it.
 const bubbles = atom({ plugin: 'pixpal', key: 'bubbles' } as const, true)
 // The robot's look: 'auto' (default, follows the system's appearance), 'dark' or 'light';
 // /pixpal theme sets it. systemTheme is the system's appearance, re-read on a clock.
 const theme = atom({ plugin: 'pixpal', key: 'theme' } as const, 'auto' as 'auto' | 'dark' | 'light')
 const systemTheme = atom({ plugin: 'pixpal', key: 'systemTheme' } as const, 'dark' as 'dark' | 'light')
-// The language the robot speaks: 'auto' (Polish or English after the person's prompt) or
-// any language by name; phrasebook holds its translated lines (null for auto).
+// The language the robot speaks: 'auto' (a built-in language, after the person's prompt) or
+// any language by name; phrasebook holds its lines (null for auto).
 const language = atom({ plugin: 'pixpal', key: 'language' } as const, 'auto')
 const phrasebook = atom({ plugin: 'pixpal', key: 'phrasebook' } as const, null as Record<string, string> | null)
 // Who the robot is drawn as; /pixpal skin sets it.
 const skin = atom({ plugin: 'pixpal', key: 'skin' } as const, 'robot' as SkinId)
+// What the settings picker pane lists: a setting given without a value opens it.
+type Picker = { setting: string; options: Array<{ value: string; label: string }>; current: string; other?: string }
+const picker = atom({ plugin: 'pixpal', key: 'picker' } as const, null as Picker | null)
+// The first of the picker's rows in view; it follows the focus.
+const pickerTop = atom({ plugin: 'pixpal', key: 'pickerTop' } as const, 0)
+// The picker slot that has the focus (`slot:<k>` or `other`), so a move knows its direction.
+const pickerFocus = atom({ plugin: 'pixpal', key: 'pickerFocus' } as const, null as string | null)
 
 const DEMO_MS = 6000
 // How often the system's light or dark appearance is re-read for the 'auto' theme.
@@ -66,9 +73,9 @@ const TYPING_QUIET_TICKS = 24
 
 type Ctx = Parameters<typeof read>[0]
 
-// The robot's lines in `name`, from the store or translated once by the small model.
+// The robot's lines in `name`: built in, from the store, or translated once by the small model.
 const phrasebookFor = async ($: Ctx, name: string): Promise<Record<string, string> | string> => {
-  const kept = (await $.store.get(PHRASEBOOK_KEY(name))) as Record<string, string> | undefined
+  const kept = builtInBook(name) ?? ((await $.store.get(PHRASEBOOK_KEY(name))) as Record<string, string> | undefined)
 
   if (kept) {
     return kept
@@ -167,7 +174,7 @@ const setLanguage = async ($: Ctx, name: string): Promise<string> => {
     await update($, phrasebook, () => null)
     await saveSetting($, { language: 'auto' })
 
-    return 'Pixpal speaks Polish or English again, after your prompt.'
+    return 'Pixpal speaks the language of your prompt again.'
   }
 
   const book = await phrasebookFor($, name)
@@ -203,6 +210,110 @@ const setSkin = async ($: Ctx, next: SkinId): Promise<string> => {
   return `Pixpal skin: ${next} (all: ${Object.keys(SKINS).join(', ')}).`
 }
 
+const PICKER = 'pixpal-picker'
+// The picker shows PICKER_VISIBLE options at a time; the pane wants room for them, the
+// heading, the field for a language of the person's own, the hints, and the gaps between.
+const PICKER_VISIBLE = 5
+const PICKER_ROWS = PICKER_VISIBLE + 6
+const PICKER_ACCENT = '#d97757'
+const PICKER_QUESTIONS: Record<string, string> = {
+  language: 'Which language should Pixpal speak?',
+  theme: 'Which look should the band have?',
+  skin: 'Who should Pixpal be?',
+  bubbles: 'Should Pixpal speak in bubbles?',
+  emotions: 'Who picks the emotion after each answer?',
+}
+
+// Which way a move from `from` to `to` goes in the ring as drawn: 1 down, -1 up (each
+// wrapping), 0 for a jump (a click).
+const directionOf = (drawn: string[], from: string, to: string) => {
+  const i = drawn.indexOf(from)
+  const j = drawn.indexOf(to)
+
+  if (i < 0 || j < 0) {
+    return 0
+  }
+
+  return j === (i + 1) % drawn.length ? 1 : j === (i - 1 + drawn.length) % drawn.length ? -1 : 0
+}
+
+type PickedSetting = 'language' | 'theme' | 'skin' | 'bubbles' | 'emotions'
+
+// The choices of a setting, with the one it has now.
+const pickerFor = async ($: Ctx, setting: PickedSetting): Promise<Picker> => {
+  switch (setting) {
+    case 'language':
+      return {
+        setting,
+        options: [{ value: 'auto', label: 'Auto (the language of your prompt)' }, ...LANGS.map(code => ({ value: LANG_LABELS[code], label: LANG_LABELS[code] }))],
+        current: await read($, language),
+        other: 'type any language, Haiku translates it once',
+      }
+    case 'theme':
+      return { setting, options: THEMES.map(value => ({ value, label: value === 'auto' ? 'Auto (follows the system)' : value })), current: await read($, theme) }
+    case 'skin':
+      return { setting, options: Object.keys(SKINS).map(value => ({ value, label: value })), current: await read($, skin) }
+    case 'bubbles':
+      return { setting, options: [{ value: 'on', label: 'on' }, { value: 'off', label: 'off' }], current: (await read($, bubbles)) ? 'on' : 'off' }
+    case 'emotions':
+      return {
+        setting,
+        options: [
+          { value: 'keywords', label: 'keywords (send nothing)' },
+          { value: 'ai', label: 'ai (Claude Haiku on your account)' },
+        ],
+        current: (await read($, smart)) ? 'ai' : 'keywords',
+      }
+  }
+}
+
+// Opens the picker for `setting`; says how to set it by hand when no pane can be drawn.
+const openPicker = async ($: Ctx, setting: PickedSetting): Promise<string> => {
+  const spec = await pickerFor($, setting)
+  const index = spec.options.findIndex(option => option.value.toLowerCase() === spec.current.toLowerCase())
+  await update($, picker, () => spec)
+  await update($, pickerTop, () => Math.max(0, Math.min(index - 2, spec.options.length - PICKER_VISIBLE)))
+  await update($, pickerFocus, () => null)
+  const opened = await $.ui.open({ id: PICKER, title: `Pixpal ${setting}`, focus: true, closeOnEscape: true, holdToasts: true, rows: PICKER_ROWS })
+
+  return opened.isPlaced
+    ? `Pick the ${setting} in the pane.`
+    : `Pixpal ${setting}: ${spec.current}. Set it with /pixpal ${setting} <${spec.options.map(option => option.value).join('|')}>.`
+}
+
+// A pick in the picker: the pane closes and a toast says what changed. A language without
+// built-in lines takes Haiku a few seconds, so a toast says so first.
+const pickValue = async ($: Ctx, setting: string, value: string) => {
+  await $.ui.close({ id: PICKER })
+
+  if (setting === 'language' && value !== 'auto' && !builtInBook(value)) {
+    $.ui.toast(`Pixpal: Haiku translates the lines into ${value}…`)
+  }
+
+  $.ui.toast(await applySetting($, setting, value))
+}
+
+// Sets `setting` to `value` (a picked or typed value) and says what it did.
+const applySetting = async ($: Ctx, setting: string, value: string): Promise<string> => {
+  const skinId = (Object.keys(SKINS) as SkinId[]).find(id => id === value)
+  const themeName = THEMES.find(option => option === value)
+
+  switch (setting) {
+    case 'language':
+      return setLanguage($, value)
+    case 'theme':
+      return themeName ? setTheme($, themeName) : `Unknown theme: ${value}.`
+    case 'skin':
+      return skinId ? setSkin($, skinId) : `Unknown skin: ${value}.`
+    case 'bubbles':
+      return setBubbles($, value === 'on')
+    case 'emotions':
+      return setEmotions($, value === 'ai' ? 'ai' : 'keywords')
+    default:
+      return `Unknown setting: ${setting}.`
+  }
+}
+
 // /pixpal help: what each option does, with the value it has now. Only the person's
 // settings are listed; the development commands (debug, classify, stats, eval,
 // demo, tired, <scene>) still work but stay out of help and the argument hint. The command's text is
@@ -218,9 +329,9 @@ const helpText = async ($: Ctx) => {
     `- \`/pixpal language <name> | auto\`: the language of the bubbles, any language${now(await read($, language))}`,
     `- \`/pixpal theme [auto|dark|light]\`: the look; auto follows the system${now(await read($, theme))}`,
     `- \`/pixpal skin [${Object.keys(SKINS).join('|')}]\`: who the robot is${now(await read($, skin))}`,
-    `- \`/pixpal bubbles\`: speech bubbles on or off${now((await read($, bubbles)) ? 'on' : 'off')}`,
+    `- \`/pixpal bubbles [on|off]\`: speech bubbles on or off${now((await read($, bubbles)) ? 'on' : 'off')}`,
     `- \`/pixpal emotions [ai|keywords]\`: who picks the emotion; ai sends a short piece of each exchange to Claude Haiku on your account${now((await read($, smart)) ? 'ai' : 'keywords')}`,
-    '- Without a value, `theme` and `skin` step to the next one.',
+    '- Without a value, a setting opens a picker.',
   ].join('\n')
 }
 
@@ -232,7 +343,7 @@ const runInit = async ($: Ctx): Promise<string> => {
   try {
     const spoken = await $.ui.ask('Which language should the robot speak in its bubbles?', {
       header: 'Language',
-      options: ['Auto (Polish or English)', 'English', 'Polski', 'Deutsch'],
+      options: ['Auto (the language of your prompt)', 'English', 'Polski', 'Deutsch'],
     })
     done.push(await setLanguage($, spoken.startsWith('Auto') ? 'auto' : spoken.trim()))
 
@@ -488,7 +599,7 @@ export const register: Register = on => {
       name: 'pixpal',
       description: 'Set up Pixpal: its character, look, language and speech bubbles',
       // shown in gray after "/pixpal " as the person types
-      argumentHint: '[help | init | language <name>|auto | theme [auto|dark|light] | skin [name] | bubbles | emotions [ai|keywords]]',
+      argumentHint: '[help | init | language [<name>|auto] | theme [auto|dark|light] | skin [name] | bubbles [on|off] | emotions [ai|keywords]]',
     })
     activeAt = await $.clock.now()
     await syncRest($, activeAt, false)
@@ -509,7 +620,7 @@ export const register: Register = on => {
     const spoken = await read($, language)
 
     if (spoken !== 'auto' && !(await read($, phrasebook))) {
-      const book = (await $.store.get(PHRASEBOOK_KEY(spoken))) as Record<string, string> | undefined
+      const book = builtInBook(spoken) ?? ((await $.store.get(PHRASEBOOK_KEY(spoken))) as Record<string, string> | undefined)
       await update($, phrasebook, () => book ?? null)
     }
     $.clock.every(THEME_MS, async () => {
@@ -690,35 +801,30 @@ export const register: Register = on => {
     }
 
     if (name === 'language') {
-      if (!argText) {
-        return { text: `Pixpal speaks: ${await read($, language)}. Set one with /pixpal language <name>, or auto.` }
-      }
-
-      return { text: await setLanguage($, argText) }
+      return { text: argText ? await setLanguage($, argText) : await openPicker($, name) }
     }
 
     if (name === 'skin') {
-      const names = Object.keys(SKINS) as SkinId[]
-      const asked = names.find(option => option === words[0])
+      const asked = (Object.keys(SKINS) as SkinId[]).find(option => option === words[0])
 
-      return { text: await setSkin($, asked ?? names[(names.indexOf(await read($, skin)) + 1) % names.length]!) }
+      return { text: asked ? await setSkin($, asked) : await openPicker($, name) }
     }
 
     if (name === 'theme') {
       const asked = THEMES.find(option => option === words[0])
 
-      return { text: await setTheme($, asked ?? THEMES[(THEMES.indexOf(await read($, theme)) + 1) % THEMES.length]!) }
+      return { text: asked ? await setTheme($, asked) : await openPicker($, name) }
     }
 
     if (name === 'bubbles') {
-      return { text: await setBubbles($, !(await read($, bubbles))) }
+      return { text: words[0] === 'on' || words[0] === 'off' ? await setBubbles($, words[0] === 'on') : await openPicker($, name) }
     }
 
     // smart is the old name of emotions, kept for development
     if (name === 'emotions' || name === 'smart') {
       const asked = words[0] === 'ai' || words[0] === 'keywords' ? words[0] : undefined
 
-      return { text: await setEmotions($, asked ?? ((await read($, smart)) ? 'keywords' : 'ai')) }
+      return { text: asked ? await setEmotions($, asked) : await openPicker($, 'emotions') }
     }
 
     // /pixpal classify <user message> | <assistant answer>
@@ -762,6 +868,96 @@ export const register: Register = on => {
     await show($, name)
 
     return { text: `Pixpal plays "${name}".` }
+  })
+
+  // The settings picker: PICKER_VISIBLE plain Buttons, the slots, over the options from
+  // pickerTop on. The arrows move the pane's focus ring over the slots, which keeps its place
+  // by position; ui.focus below scrolls the options under it at either end.
+  on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e) => {
+    const elements = $.ui.resolve(e)
+    const { Box, Button, Text } = elements
+    const spec = await read($, picker)
+
+    if (!spec) {
+      return <Text dimColor>Nothing to pick.</Text>
+    }
+
+    const top = await read($, pickerTop)
+    const rows = spec.options.length
+    const isCurrent = (value: string) => value.toLowerCase() === spec.current.toLowerCase()
+    const more = `${top > 0 ? '▲' : ' '}${top + PICKER_VISIBLE < rows ? '▼' : ' '}`
+
+    const now = spec.options.find(option => isCurrent(option.value))?.label ?? spec.current
+
+    return (
+      <Box flexDirection="column" paddingX={2} paddingTop={1}>
+        <Box flexDirection="row" marginBottom={1}>
+          <Text bold color={PICKER_ACCENT}>
+            {PICKER_QUESTIONS[spec.setting] ?? spec.setting}
+          </Text>
+          <Text dimColor> now: {now}</Text>
+        </Box>
+        {spec.options.slice(top, top + PICKER_VISIBLE).map((option, k) => (
+          <Button
+            key={`slot:${k}`}
+            plain
+            autoFocus={isCurrent(option.value) || undefined}
+            label={`${String(top + k + 1).padStart(String(rows).length)}. ${option.label}${isCurrent(option.value) ? '  ✓' : ''}`}
+            onPress={() => void pickValue($, spec.setting, option.value)}
+          />
+        ))}
+        {spec.other && 'Input' in elements && (
+          <elements.Input key="other" placeholder={`Other: ${spec.other}`} onSubmit={value => value.trim() && void pickValue($, spec.setting, value.trim())} />
+        )}
+        <Box marginTop={1}>
+          <Text dimColor wrap="truncate">
+            {more} {rows} · ↑↓ move · Enter picks · Esc closes
+          </Text>
+        </Box>
+      </Box>
+    )
+  })
+
+  // Down from the last slot while options are left below, or up from the first while some
+  // are above: the ring stays put and the options scroll under it. Wrapping from the field
+  // to a slot shows the list's start (down) or end (up).
+  on('ui.focus', async ($, e, next) => {
+    const spec = await read($, picker)
+
+    if (e.requestId !== PICKER || !spec || e.element === undefined) {
+      return next(e)
+    }
+
+    const rows = spec.options.length
+    const slots = Math.min(PICKER_VISIBLE, rows)
+    const top = await read($, pickerTop)
+    const drawn = [...Array.from({ length: slots }, (_, k) => `slot:${k}`), ...(spec.other ? ['other'] : [])]
+    const from = await read($, pickerFocus)
+    const direction = from && e.origin.kind === 'person' ? directionOf(drawn, from, e.element) : 0
+
+    if (direction === 1 && from === `slot:${slots - 1}` && top + slots < rows) {
+      await update($, pickerTop, () => top + 1)
+
+      return {}
+    }
+
+    if (direction === -1 && from === 'slot:0' && top > 0) {
+      await update($, pickerTop, () => top - 1)
+
+      return {}
+    }
+
+    const result = await next(e)
+
+    if (!result.deny) {
+      await update($, pickerFocus, () => e.element!)
+
+      if (from === 'other' && direction !== 0) {
+        await update($, pickerTop, () => (direction === 1 ? 0 : rows - slots))
+      }
+    }
+
+    return result
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
