@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # Notes for Claude sessions working on this repo (personal, not published)
 .claude/
+
+# Classifier eval data: kept local, not in the repo
+evals/
