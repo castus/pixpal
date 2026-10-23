@@ -26,6 +26,9 @@ const pending = atom({ plugin: 'pixpal', key: 'pending' } as const, null)
 const smart = atom({ plugin: 'pixpal', key: 'smart' } as const, false)
 // How many agents run now; each one stands beside the robot as a mini robot.
 const agents = atom({ plugin: 'pixpal', key: 'agents' } as const, 0)
+// A workflow's agents, which $.agent.list() leaves out: agentId -> when it was last heard
+// from (its spawn or a tool call). Its turn.complete takes it off.
+const workflowAgents = atom({ plugin: 'pixpal', key: 'workflowAgents' } as const, {} as Record<string, number>)
 // The person's language, from their last prompt; emotions speak it in a bubble.
 const lang = atom({ plugin: 'pixpal', key: 'lang' } as const, 'en' as Lang)
 // Whether the robot speaks in bubbles at all (emotions and work); /pixpal bubbles toggles it.
@@ -58,6 +61,8 @@ const AGENTS_MS = 2000
 // A finishing agent may still be listed as running for a moment after its last event.
 const AGENT_SETTLE_MS = 300
 const ACTIVE_AGENT = new Set(['pending', 'running', 'waiting'])
+// A workflow agent not heard from for this long is taken as gone (its end was missed).
+const WORKFLOW_AGENT_STALE_MS = 30 * 60_000
 const WATCH_MS = 5000
 const SLEEP_AFTER_MS = 60_000
 const CLASSIFIER_MODEL = 'haiku'
@@ -411,7 +416,15 @@ const syncTheme = async ($: Ctx) => {
 
 // Counts the agents that run now and stores the number when it changed.
 const syncAgents = async ($: Ctx) => {
-  const count = (await $.agent.list()).filter(agent => ACTIVE_AGENT.has(agent.status)).length
+  const now = await $.clock.now()
+  const tracked = await read($, workflowAgents)
+  const live = Object.entries(tracked).filter(([, seenAt]) => now - seenAt < WORKFLOW_AGENT_STALE_MS)
+
+  if (live.length !== Object.keys(tracked).length) {
+    await update($, workflowAgents, () => Object.fromEntries(live))
+  }
+
+  const count = (await $.agent.list()).filter(agent => ACTIVE_AGENT.has(agent.status)).length + live.length
 
   if (count !== (await read($, agents))) {
     await update($, agents, () => count)
@@ -727,8 +740,16 @@ export const register: Register = on => {
   // The robot shows the tool that is running, one to one. A call that ends within
   // TOOL_SCENE_DELAY_MS shows nothing, so quick calls do not flicker.
   on('tool.call', async ($, e, next) => {
-    // an agent's own tools show on its mini robot's loop, not on this robot
+    // an agent's own tools show on its mini robot's loop, not on this robot; a workflow
+    // agent's call says it is still at work
     if (e.agentId) {
+      const id = e.agentId
+
+      if ((await read($, workflowAgents))[id] !== undefined) {
+        const now = await $.clock.now()
+        await update($, workflowAgents, all => ({ ...all, [id]: now }))
+      }
+
       return next(e)
     }
 
@@ -777,6 +798,12 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     // a subagent finishing is not the end of the turn, only one mini robot fewer
     if (e.agentId) {
+      const id = e.agentId
+
+      if ((await read($, workflowAgents))[id] !== undefined) {
+        await update($, workflowAgents, ({ [id]: _done, ...others }) => others)
+      }
+
       $.clock.after(AGENT_SETTLE_MS, () => syncAgents($))
 
       return next(e)
@@ -796,6 +823,13 @@ export const register: Register = on => {
   // A new agent: one more mini robot.
   on('agent.spawn', async ($, e, next) => {
     const result = await next(e)
+
+    // a workflow's agent is not in $.agent.list(), so it is counted here
+    if (e.workflow && !result.deny && result.agentId) {
+      const id = result.agentId
+      const now = await $.clock.now()
+      await update($, workflowAgents, all => ({ ...all, [id]: now }))
+    }
     void syncAgents($).catch(error => recordError($, error))
 
     return result

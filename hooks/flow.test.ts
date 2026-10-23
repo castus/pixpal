@@ -126,6 +126,38 @@ test('each running agent stands beside the robot, and one that finishes leaves',
   expect(await agentsShown($)).toBe(2)
 })
 
+test('a workflow agent, left out of the agent list, still gets a mini robot until it ends', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  bottom(on, 'happy')
+  let next = 0
+  on('agent.spawn', () => ({ model: 'haiku', agentId: `w${next++}` }) as never)
+  await startWith($, on)
+
+  const spawn = () => $.agent.spawn({ prompt: 'label the pool', description: 'x', workflow: { runId: 'wf_test' } } as never)
+  await spawn()
+  await spawn()
+  await clock.settle()
+  expect(await agentsShown($)).toBe(2)
+
+  // one finishes
+  await $.turn.complete({ answer: 'done', durationMs: 900, isAborted: false, turnId: 'w0t', reason: 'answer', agentId: 'w0' } as never)
+  await clock.advance(400)
+  await clock.settle()
+  expect(await agentsShown($)).toBe(1)
+
+  // the other's end is missed: it goes after a long silence, but a tool call keeps it alive
+  await clock.advance(20 * 60_000)
+  await $.tool.call({ tool: 'Bash', input: { command: 'ls' }, agentId: 'w1', tool_use_id: 'u1' } as never)
+  await clock.advance(20 * 60_000)
+  await clock.settle()
+  expect(await agentsShown($)).toBe(1)
+
+  await clock.advance(31 * 60_000)
+  await clock.settle()
+  expect(await agentsShown($)).toBe(0)
+})
+
 test('the person’s choices outlast the process: a new session reads them back', async ($, on) => {
   mock.clock(on)
   mock.store(on, { 'pixpal.settings': { theme: 'dark', skin: 'cat', bubbles: false } })
