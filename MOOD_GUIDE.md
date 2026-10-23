@@ -31,14 +31,6 @@ Read every user message as a *cause*, and pick the emotion Claude has in respons
 A subagent finishing is never the end of the turn: only the main loop's `turn.complete`
 starts phase 3.
 
-## Agents: mini robots
-
-Every agent that runs (status `pending`, `running` or `waiting`) stands beside the robot as
-a mini robot with a blinking antenna, in any phase. Up to four are drawn; more are counted
-as text (`+3`). A mini appears on `agent.spawn` and leaves when its agent's `turn.complete`
-(with `agentId`) arrives; `$.agent.list()` is re-read every 2 s as the source of truth. An
-agent's own tool calls never change the main robot's scene.
-
 ## Phase 2: what Claude is doing, tool by tool
 
 A scene shows only for a call that runs over 600 ms, so quick calls do not flicker. When
@@ -74,6 +66,15 @@ it is added.
 | `cat`, `head`, `tail`, `less`, `more`, `ls`, `tree`, `stat`, `wc`, `file`, `du`, `df`, `pwd` | `read` |
 | `make`, `npm`, `pnpm`, `yarn`, `docker`, `kubectl`, `helm`, `terraform`, `pip`, `pip3`, `brew`, `cargo`, `python`, `python3`, `node`, `bun`, `uv` | `run` |
 | anything else | `type` |
+
+How the match works (`COMMAND_SCENES` in `hooks/mood.ts`):
+
+- The rows are tried top to bottom, and each row looks at the whole command, not only its
+  first word. The first row that matches anywhere wins: `cat x | grep y` is `lens` (its row
+  comes before `read`), and `cd repo && git status` is `git`.
+- A test runner wins over every other row: `git stash && npm test` is a test.
+- The test runner names match inside other words too (`majestic` contains `jest`); the
+  other rows match whole words only.
 
 ## Phase 3: final emotions (the classifier chooses one)
 
