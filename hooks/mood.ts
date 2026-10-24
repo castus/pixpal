@@ -5,46 +5,89 @@
 // it is doing right now (sceneForTool, otherwise thinking), 3) the answer arrives and one
 // emotion plays (the classifier, with sceneForExchange as the keyword fallback).
 //
-// The cue words cover pl, en, de, es, fr, it, pt, uk, ru, ja, zh and ko. They are plain
-// substrings of the lowercased text, so a stem ("entschuldig", "извин") covers its forms.
-const has = (text: string, words: string[]) => words.some(word => text.includes(word))
+// The cue words cover pl, en, de, es, fr, it, pt, uk, ru, ja, zh and ko. A cue matches as
+// a whole word ("danke" is not found in "Gedanke"); a trailing '*' marks a stem
+// ("entschuldig*", "извин*") that covers its forms. Japanese, Chinese and Korean cues have
+// no spaces around them, so they match as plain substrings.
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
+const WORD_CHAR = /[\p{L}\p{N}]/u
 
-const FRUSTRATED = [
-  'kurwa', 'cholera', 'wkurw', 'znowu', 'dalej nie', 'nadal nie', 'still not', 'wtf', 'ugh', 'damn', 'again?!', 'again??',
-  'schon wieder', 'immer noch nicht', 'verdammt', 'scheiße', 'scheisse', 'otra vez', 'sigue sin', 'toujours pas', 'putain',
-  'di nuovo', 'ancora non', 'de novo', 'ainda não', 'опять', 'всё ещё не', 'все еще не', 'досі не', 'まだ動かない', '还是不行', '又坏了', '아직도 안',
-]
-const SORRY = [
-  'sorry', 'przepraszam', 'mój błąd', 'moj blad', 'my bad', 'entschuldig', 'mein fehler', 'perdón', 'perdon', 'lo siento', 'disculpa',
-  'désolé', 'desole', 'scusa', 'desculp', 'извини', 'простите', 'вибач', 'пробач', 'すみません', 'ごめん', '抱歉', '对不起', '不好意思', '죄송', '미안',
-]
-const THANKS = [
-  'dzięki', 'dzieki', 'dziękuję', 'dziekuje', 'thanks', 'thank you', 'thx', 'danke', 'vielen dank', 'gracias', 'merci', 'grazie',
-  'obrigad', 'спасибо', 'благодарю', 'дякую', 'ありがとう', '谢谢', '多谢', '感谢', '감사', '고마워',
+function cues(words: string[]): RegExp {
+  const parts = words.map(word => {
+    const isStem = word.endsWith('*')
+    const core = isStem ? word.slice(0, -1) : word
+    const escaped = core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    if (CJK.test(core)) {
+      return escaped
+    }
+
+    const left = WORD_CHAR.test(core[0]!) ? '(?<![\\p{L}\\p{N}])' : ''
+    const right = !isStem && WORD_CHAR.test(core.at(-1)!) ? '(?![\\p{L}\\p{N}])' : ''
+
+    return left + escaped + right
+  })
+
+  return new RegExp(parts.join('|'), 'u')
+}
+
+const has = (text: string, cue: RegExp) => cue.test(text)
+// typographic apostrophes are read as plain ones
+const normalize = (text: string) => text.toLowerCase().replace(/[’`]/g, "'")
+
+// "still not working": the user tried and it failed again
+const STILL_NOT = cues([
+  'still not', "still doesn't", "still don't", "still isn't", 'still broken', 'still fail*', 'dalej nie', 'nadal nie', 'wciąż nie', 'ciągle nie',
+  'immer noch nicht', 'noch immer nicht', 'immer noch kaputt', 'sigue sin', 'sigue fallando', 'toujours pas',
+  'continua a non', 'continua sem', 'всё ещё не', 'все ещё не', 'все еще не', 'до сих пор не', 'досі не', 'все ще не', 'як і раніше не',
+  'まだ動かない', 'まだ直って', 'まだダメ', '还是不行', '还是没', '仍然不', '依然不', '아직도 안', '여전히 안',
+])
+// "again" is plain on its own ("run it again?"); it is frustration only with "!", "??", "?!" or a "not" after it
+const AGAIN = /(?<![\p{L}\p{N}])(again|znowu|znów|wieder|otra vez|de nuevo|encore|di nuovo|ancora una volta|de novo|outra vez|опять|снова|знову|又|また|다시|또)[\s,]*(!|！|[?？]{2,}|[?？][!！]|(not|nie|nicht|no|non|pas|não|не|ні|没|不|안)(?![\p{L}\p{N}]))/u
+const SORRY = cues([
+  'sorry', 'sorki', 'przepraszam', 'wybacz*', 'mój błąd', 'moj blad', 'moja wina', 'my bad', 'my mistake', 'my fault', 'entschuldig*', 'mein fehler',
+  'meine schuld', 'perdón', 'perdon', 'lo siento', 'disculp*', 'mi culpa', 'mi error', 'désolé*', 'desole*', 'pardon', 'ma faute', 'mon erreur',
+  'scus*', 'colpa mia', 'errore mio', 'desculp*', 'foi mal', 'erro meu', 'извин*', 'прости*', 'моя ошибка', 'моя вина', 'вибач*', 'пробач*',
+  'моя помилка', 'すみません', 'ごめん', '申し訳', '抱歉', '对不起', '不好意思', '我的错', '죄송', '미안',
+])
+const THANKS = cues([
+  'dzięk*', 'dziek*', 'thanks', 'thank you', 'thank u', 'thx', 'danke*', 'vielen dank', 'gracias', 'merci', 'grazie', 'obrigad*', 'valeu',
+  'спасибо', 'спс', 'благодар*', 'дякую', 'ありがと', '谢谢', '多谢', '感谢', '감사합니다', '감사해요', '감사드', '고마워', '고맙',
   // a compliment to Claude's work is thanks too
-  'świetna robota', 'swietna robota', 'super robota', 'dobra robota', 'great job', 'great work', 'nice work', 'well done', 'gute arbeit',
-  'buen trabajo', 'bon travail', 'ottimo lavoro', 'bom trabalho', 'отличная работа', 'чудова робота', '干得好', '수고',
-]
+  'dobra robota', 'świetna robota', 'swietna robota', 'super robota', 'good job', 'great job', 'nice job', 'great work', 'nice work', 'good work',
+  'well done', 'gute arbeit', 'super arbeit', 'buen trabajo', 'gran trabajo', 'bon travail', 'beau travail', 'bien joué', 'ottimo lavoro',
+  'bel lavoro', 'bom trabalho', 'ótimo trabalho', 'отличная работа', 'хорошая работа', 'молодец', 'чудова робота', 'гарна робота', 'молодець',
+  '干得好', '做得好', '辛苦了', 'お疲れ', '助かり', '수고', '잘했',
+])
+// thanks with a new task after it ("thanks, now add tests") is a request: the answer decides
+const NEXT = cues([
+  'now', 'next', 'also', 'teraz', 'jeszcze', 'jetzt', 'nun', 'noch', 'ahora', 'también', 'maintenant', 'aussi', 'ora', 'anche', 'agora', 'também',
+  'теперь', 'ещё', 'еще', 'тепер', 'також', '次', 'じゃあ', '接下来', '现在', '再', '이제', '다음', '그리고',
+])
 // "no thanks" declines an offer; it is not thanks
 const DECLINE = /^(no|nie|nein|non|não|нет|ні)[,.!]? *(thanks|thank you|dzięki|dziękuję|danke|gracias|merci|grazie|obrigad|спасибо|дякую)/
-const GREETING = /^(cześć|czesc|hej|siema|witaj|dzień dobry|dzien dobry|hello|hi|hiya|hey|good morning|good evening|hallo|moin|servus|guten morgen|guten tag|hola|buenos días|buenos dias|bonjour|salut|ciao|buongiorno|olá|ola|oi|bom dia|привет|здравствуй|добрый день|доброе утро|привіт|вітаю|добрий день|доброго ранку|こんにちは|おはよう|こんばんは|你好|您好|早上好|嗨|안녕하세요|안녕)(?!\p{L})/u
+// Japanese, Chinese and Korean greetings run straight into the next word, so only the others need a word end
+const GREETING = /^((cześć|czesc|hej|siema|witaj|witam|dzień dobry|dzien dobry|dobry wieczór|hello|hi|hiya|hey|good morning|good evening|hallo|moin|servus|guten morgen|guten tag|guten abend|hola|buenas|buenos días|buenos dias|buenas tardes|bonjour|bonsoir|salut|coucou|allo|allô|ciao|buongiorno|buonasera|olá|ola|oi|eae|e aí|bom dia|boa tarde|boa noite|привет|здравствуй|здравствуйте|добрый день|доброе утро|добрый вечер|привіт|вітаю|добрий день|доброго ранку|добрий ранок|добрий вечір)(?![\p{L}\p{N}])|こんにちは|おはよう|こんばんは|やっほ|你好|您好|早上好|晚上好|哈喽|嗨|在吗|안녕|반가|좋은 아침|하이)/u
 // a greeting decides only when the message is mostly the greeting
 const GREETING_WORDS = 5
 
+// "LEFT JOIN 이랑 INNER JOIN 차이" is no shouting: most of its letters have no case
 const isShouting = (text: string) => {
   const letters = [...text].filter(ch => ch.toLowerCase() !== ch.toUpperCase())
   const upper = letters.filter(ch => ch === ch.toUpperCase())
 
-  return letters.length >= 8 && upper.length / letters.length > 0.6
+  return letters.length >= 8 && letters.length * 2 >= (text.match(/\p{L}/gu) ?? []).length && upper.length / letters.length > 0.6
 }
+
+const isFrustrated = (user: string, lower: string) => isShouting(user) || has(lower, STILL_NOT) || AGAIN.test(lower)
 
 // Social cues in the user's message. Only the keyword fallback of the final emotion uses
 // them (the classifier reads the message itself); the work phase ignores the prompt.
 function socialCue(user: string): string | undefined {
-  const lower = user.toLowerCase().trim()
+  const lower = normalize(user).trim()
   const isThanks = has(lower, THANKS) && !DECLINE.test(lower)
 
-  if ((user.includes('!!') && !isThanks) || isShouting(user) || has(lower, FRUSTRATED)) {
+  if ((user.includes('!!') && !isThanks) || isFrustrated(user, lower)) {
     return 'contrite'
   }
 
@@ -52,8 +95,8 @@ function socialCue(user: string): string | undefined {
     return 'relieved'
   }
 
-  // thanks followed by a new question is a request: the answer to it decides
-  if (isThanks && !user.includes('?')) {
+  // thanks followed by a new question or task is a request: the answer to it decides
+  if (isThanks && !user.includes('?') && !has(lower, NEXT)) {
     return 'shy'
   }
 
@@ -62,7 +105,7 @@ function socialCue(user: string): string | undefined {
 
 // Words that open many answers but carry no verdict ("OK, ...", "Sure! ...", "No problem.").
 // They are cut off before the opening is read.
-const FILLER = /^([\s,.!:;—–\-、，。！\uFE0F]+|\p{Extended_Pictographic}+|(ok(ay)?|okej|super|sure|alright|of course|no problem( at all)?|no worries|haha|aww?|gut|alles klar|klar|natürlich|kein problem|spoko|dobra|no dobra|jasne|oczywiście|nie ma sprawy|nie ma problemu|vale|claro|por supuesto|d'accord|bien sûr|va bene|certo|certamente|com certeza|хорошо|ладно|конечно|добре|звісно|звичайно|わかりました|もちろん|好的|当然|알겠습니다|물론)(?=[\s,.!:;—–\-、，。！]|\p{Extended_Pictographic}|$))/u
+const FILLER = /^([\s,.!:;—–\-、，。！️]+|\p{Extended_Pictographic}+|(ok(ay)?|okej|super|sure|alright|of course|no problem( at all)?|no worries|haha|aww?|gut|alles klar|klar|natürlich|kein problem|spoko|dobra|no dobra|jasne|oczywiście|nie ma sprawy|nie ma problemu|vale|claro|por supuesto|d'accord|bien sûr|va bene|certo|certamente|com certeza|хорошо|ладно|конечно|добре|звісно|звичайно|わかりました|もちろん|好的|当然|알겠습니다|물론)(?=[\s,.!:;—–\-、，。！]|\p{Extended_Pictographic}|$))/u
 
 function openingOf(lower: string): string {
   let text = lower.trimStart()
@@ -74,110 +117,151 @@ function openingOf(lower: string): string {
   return text
 }
 
-const STOP = /^(before (i|you|we) |zanim |bevor (ich|du|wir) |(stop|stopp|wait|hold on|careful|warning|important:|uwaga|czekaj|ważne:|wazne:|achtung|vorsicht|warte|moment mal|warnung|¡?alto|¡?cuidado|¡?atención|attention|attends|attenzione|aspetta|atenção|стоп|стой|внимание|осторожно|подожди|увага|обережно|зачекай|待って|ストップ|警告|等等|잠깐|주의|경고)(?!\p{L}))/u
-const YES = /^(tak|yes|yep|yeah|owszem|zgadza się|ja|jawohl|genau|richtig|stimmt|exakt|correct|exactly|right|sí|si|exacto|oui|exactement|sì|esatto|sim|exato|да|верно|точно|так|правильно|はい|そうです|是的|对|對|没错|沒錯|네|맞아요|맞습니다)(?=\s*[,.!:;—–\-、，。！]|$)/u
-const NO = /^(nie|nein|nope|non|não|nao|нет|ні|いいえ|아니요|아뇨|아니오|不是|没有|不行)(?!\p{L})|^no(?!\p{L})(?! (dobra|tak|to|i|więc|wiec)\b)/u
-const PRAISE = [
-  'dobry catch', 'good catch', 'nice catch', 'great catch', 'dobra uwaga', 'trafna uwaga', 'słuszna uwaga', 'trafne', 'dobre spostrzeżenie',
-  'good point', 'great point', 'świetny pomysł', 'swietny pomysl', 'dobry pomysł', 'super pomysł', 'great idea', 'good idea', 'nice idea',
-  'guter fang', 'guter punkt', 'gute idee', 'gute beobachtung', 'buena idea', 'buena observación', 'bien visto', 'bonne idée', 'bonne remarque',
-  'bien vu', 'buona idea', 'ottima idea', 'buona osservazione', 'boa ideia', 'boa observação', 'bem visto', 'хорошая идея', 'отличная идея',
-  'хорошее замечание', 'верное замечание', 'гарна ідея', 'чудова ідея', 'слушне зауваження', 'гарне зауваження', 'いい指摘', '良い指摘',
-  'いいアイデア', '好主意', '说得好', '发现得好', '좋은 지적', '좋은 아이디어', '좋은 생각',
-]
+const STOP = /^[*_]*(before (i|you|we) |zanim |bevor (ich|du|wir) |(stop|stopp|wait|hold on|careful|warning|important|uwaga|czekaj|stój|ostrożnie|ważne|wazne|achtung|vorsicht|warte|moment mal|warnung|wichtig|¡?alto|¡para|¡?espera|¡?cuidado|¡?atención|¡?ojo|importante|attention|attends|halte|prudence|attenzione|aspetta|fermo|ferma|atenção|cuidado|espera|стоп|стой|внимание|осторожно|подожди|важно|увага|обережно|зачекай|стривай|важливо)(?!\p{L})|待って|ストップ|注意|警告|重要|等等|等一下|先别|停[!！]|잠깐|주의|경고|중요)/u
+const YES = /^(tak|yes|yep|yeah|owszem|zgadza się|ja|jawohl|genau|richtig|stimmt|exakt|correct|exactly|right|sí|si|exacto|oui|exactement|sì|esatto|sim|exato|да|верно|точно|правильно|はい|そうです|是的|对|對|没错|沒錯|네|맞아요|맞습니다)(?=\s*[,.!:;—–\-、，。！]|$)/u
+// "Так" is yes in Ukrainian but "so, ..." in Russian: it counts only in a Ukrainian answer
+const UK_YES = /^так(?=\s*[,.!:;—–\-]|$)/u
+const UKRAINIAN = /[іїєґ]/u
+const NO = /^(nie|nein|nope|non|não|nao|нет|ні)(?!\p{L})|^(いいえ|いや、|아니|不是|不行|不会|不能|不记得|不用|没有)|^no(?!\p{L})(?! (dobra|tak|to|i|więc|wiec)\b)/u
+const PRAISE = cues([
+  'good catch', 'nice catch', 'great catch', 'good point', 'great point', 'fair point', 'good idea', 'great idea', 'nice idea', 'good call', 'well spotted',
+  'good eye', 'sharp eye', 'dobry catch', 'dobra uwaga', 'trafna uwaga', 'słuszna uwaga', 'trafne', 'dobre spostrzeżenie', 'dobre oko', 'dobry pomysł',
+  'świetny pomysł', 'swietny pomysl', 'super pomysł', 'guter fang', 'guter punkt', 'guter hinweis', 'gute idee', 'gute beobachtung', 'gut erkannt',
+  'gut gesehen', 'buena idea', 'buen punto', 'buena observación', 'buen ojo', 'bien visto', 'bonne idée', 'excellente idée', 'bonne remarque',
+  'bonne observation', 'bien vu', 'buona idea', 'ottima idea', 'bella idea', 'buona osservazione', 'ottima osservazione', 'buon punto',
+  'boa ideia', 'ótima ideia', 'boa observação', 'bem visto', 'bem observado', 'хорошая идея', 'отличная идея', 'хорошее замечание',
+  'верное замечание', 'справедливое замечание', 'гарна ідея', 'чудова ідея', 'слушне зауваження', 'гарне зауваження', 'влучне зауваження',
+  '指摘', '良い発想', 'いい発想', '鋭い', 'いいアイデア', '好主意', '说得好', '发现得好', '好发现', '抓得好', '眼尖', '好眼力', '좋은 지적', '좋은 아이디어',
+  '좋은 생각', '예리', '잘 잡', '잘 짚',
+])
 // Claude owns a mistake: an apology or "my fault" in the opening
-const CONTRITE = [
-  'sorry', 'i apologize', 'apologies', 'my mistake', 'my bad', "that's on me", 'that is on me', 'my fault', 'i was wrong',
-  'przepraszam', 'mój błąd', 'moj blad', 'moja wina', 'pomyliłem się', 'pomyliłam się', 'źle zrozumiałem',
-  'entschuldig', 'tut mir leid', 'mein fehler', 'meine schuld', 'habe mich vertan', 'habe mich geirrt', 'lag ich falsch',
-  'perdón', 'lo siento', 'disculpa', 'mi error', 'me equivoqué', 'désolé', 'mon erreur', 'je me suis trompé', 'mi dispiace', 'scusa',
-  'errore mio', 'mio errore', 'mi sono sbagliato', 'desculp', 'erro meu', 'me enganei', 'извин', 'прошу прощения', 'моя ошибка', 'я ошибся',
-  'вибач', 'перепрошую', 'моя помилка', 'я помилився', 'すみません', '申し訳', 'ごめん', '私のミス', '抱歉', '对不起', '我的错', '죄송', '미안', '제 실수',
-]
+const CONTRITE = cues([
+  'sorry', 'i apologize', 'apologies', 'my mistake', 'my bad', "that's on me", 'that is on me', 'my fault', 'i was wrong', 'i messed up', 'i got it wrong',
+  'przepraszam', 'mój błąd', 'moj blad', 'moja wina', 'pomyliłem', 'pomyliłam', 'źle zrozumiałem', 'źle zrozumiałam',
+  'entschuldig*', 'tut mir leid', 'mein fehler', 'meine schuld', 'vertan', 'geirrt', 'falsch gelegen',
+  'perdón', 'lo siento', 'disculp*', 'mi error', 'mi culpa', 'me equivoqué', 'désolé*', 'mon erreur', 'ma faute', 'je me suis trompé*',
+  'mi dispiace', 'scus*', 'errore mio', 'mio errore', 'colpa mia', 'mi sono sbagliat*', 'ho sbagliato', 'desculp*', 'erro meu', 'culpa minha',
+  'me enganei', 'errei', 'извин*', 'прошу прощения', 'моя ошибка', 'моя вина', 'я ошиб*', 'виноват*', 'вибач*', 'перепрошую', 'моя помилка',
+  'моя провина', 'я помил*', 'すみません', '申し訳', 'ごめん', '私のミス', '私の間違い', '抱歉', '对不起', '我的错', '是我搞错', '죄송', '미안', '제 실수', '제가 잘못',
+])
 // "Sorry, but that is not possible" is regret about a fact, not an own mistake
-const REGRET = ['sorry, but', 'sorry but', 'tut mir leid, aber', 'leider', 'niestety', 'przepraszam, ale', 'lo siento, pero', 'désolé, mais', 'mi dispiace, ma', 'desculpe, mas', 'к сожалению', 'на жаль']
+const REGRET = cues(['sorry, but', 'sorry but', 'tut mir leid, aber', 'leider', 'niestety', 'przepraszam, ale', 'lo siento, pero', 'désolé, mais', 'mi dispiace, ma', 'desculpe, mas', 'к сожалению', 'на жаль'])
 // a fear or a problem turned out fine
-const RELIEF = [
-  'false alarm', 'turned out fine', 'nothing is lost', 'nothing was lost', "don't worry", 'phew', 'fałszywy alarm', 'nic nie zginęło',
-  'nic się nie stało', 'spokojnie', 'uff,', 'uff.', 'uff!', 'fehlalarm', 'keine sorge', 'nichts verloren', 'falsa alarma', 'no te preocupes', 'fausse alerte',
-  'pas de panique', 'falso allarme', 'non preoccuparti', 'alarme falso', 'não se preocupe', 'ложная тревога', 'не переживай', 'не волнуйся',
-  'хибна тривога', 'не хвилюйся', 'ご心配なく', '虚惊一场', '别担心', '걱정 마',
-]
-const SURPRISED = [
-  'unexpected', 'surprising', "didn't expect", 'did not expect', 'huh', 'nie spodziewałem', 'nie spodziewałam', 'zaskakując', 'to dziwne',
-  'unerwartet', 'überrasch', 'nicht erwartet', 'inesperad', 'sorprend', 'no esperaba', 'inattendu', 'surpren', "je ne m'attendais",
-  'inaspettat', 'non mi aspettavo', 'surpreend', 'não esperava', 'неожиданно', 'не ожидал', 'несподівано', 'не очікував', '意外', '予想外',
-  '没想到', '出乎意料', '의외', '뜻밖', '예상 밖',
-]
-// a turnaround or a milestone: something failed before and works now
-const CHEER = [
-  '🎉', '🚀', '🥳', '💪', '🏆', 'green again', 'finally', 'found and fixed', 'nailed it', 'we did it', 'udało się', 'mamy to',
-  'nareszcie', 'znowu zielon', 'wieder grün', 'endlich', 'geschafft', 'gefunden und behoben', 'por fin', 'lo logramos', 'on a réussi',
-  "ce l'abbiamo fatta", 'conseguimos', 'наконец', 'нарешті', 'やった', 'ついに', '终于', '搞定了', '드디어', '해냈',
-]
-// "all green" is routine, unless the user came with something failing: then it is a turnaround
-const GREEN = ['all green', 'all tests pass', 'wszystko zielon', 'wszystkie testy przechodz', 'alles grün', 'alle tests grün', 'todo en verde', 'tout est vert', 'tutto verde', 'tudo verde', 'всё зелёное', 'все зелен', 'усе зелен', '全部通过', '全部グリーン']
-const FAILING = ['fail', 'broken', 'flaky', 'kaputt', 'sind rot', 'ist rot', 'czerwon', 'padaj', 'nie przechodz', 'falla', 'échou', 'fallisc', 'falha', 'пада', '失败', '失敗', '실패']
+const RELIEF = cues([
+  'false alarm', 'good news', 'turned out fine', 'nothing is lost', 'nothing was lost', 'nothing broke', "don't worry", 'no harm', 'phew',
+  'fałszywy alarm', 'dobra wiadomość', 'nic nie zginęło', 'nic się nie stało', 'spokojnie', 'uff', 'fehlalarm', 'gute nachricht*', 'keine sorge',
+  'nichts verloren', 'puh', 'falsa alarma', 'buenas noticias', 'buena noticia', 'no te preocupes', 'menos mal', 'fausse alerte', 'bonne nouvelle',
+  'pas de panique', 'ouf', 'falso allarme', 'buone notizie', 'buona notizia', 'non preoccuparti', 'meno male', 'alarme falso', 'boa notícia',
+  'boas notícias', 'não se preocupe', 'ainda bem', 'ложная тревога', 'хорошая новость', 'хорошие новости', 'не переживай', 'не волнуйся', 'фух',
+  'хибна тривога', 'гарна новина', 'добра новина', 'не хвилюйся', 'ご心配なく', '安心', 'よかった', '虚惊一场', '别担心', '好消息', '放心', '没事', '那就好', '还好',
+  '걱정 마', '다행', '휴,',
+])
+const SURPRISED = cues([
+  'unexpected', 'unexpectedly', 'surprising', 'surprisingly', "didn't expect", 'did not expect', 'huh', 'wow', 'whoa', 'strange', 'weird', 'odd',
+  'nie spodziewał*', 'zaskakując*', 'zaskocz*', 'dziwne', 'ciekawe', 'unerwartet', 'überrasch*', 'nicht erwartet', 'seltsam', 'merkwürdig',
+  'komisch', 'inesperad*', 'sorprend*', 'no esperaba', 'no me lo esperaba', 'vaya', 'qué raro', 'extraño', 'inattendu*', 'surpren*',
+  "je ne m'attendais", "je ne m'y attendais", 'étrange', 'bizarre', 'inaspettat*', 'non mi aspettavo', 'strano', 'curioso', 'surpreend*',
+  'não esperava', 'estranho', 'неожиданно', 'не ожидал*', 'странно', 'удивительно', 'несподівано', 'не очікував', 'дивно', '意外', '予想外',
+  'びっくり', '驚', '没想到', '出乎意料', '奇怪', '惊讶', '의외', '뜻밖', '예상 밖', '놀랐', '놀랍', '이상하네', '이상하게',
+])
+// a milestone: a hard task is done
+const CHEER = cues([
+  '🎉', '🥳', '🏆', 'nailed it', 'we did it', 'udało się', 'geschafft', 'lo logramos', 'lo conseguimos', 'on a réussi', "ce l'abbiamo fatta",
+  'conseguimos', 'conseguido', 'получилось!', 'вийшло!', 'やった', '搞定了', '해냈',
+])
+// a rocket or a flexed arm is pride only with an exclamation: "Done! 🚀"
+const PROUD = cues(['🚀', '💪'])
+// "finally" or "all green" is routine, unless the user came with something failing: then it is a turnaround
+const TURNAROUND = cues([
+  'finally', 'nareszcie', 'wreszcie', 'endlich', 'por fin', 'enfin', 'finalmente', 'наконец', 'нарешті', 'ついに', 'やっと', '终于', '드디어',
+  'green', 'grün*', 'zielon*', 'verde', 'vert', 'verts', 'зелен*', 'зелён*', 'グリーン', '绿', '초록', 'all tests pass*', 'all pass*',
+  'wszystkie testy', 'alle tests', 'todos los tests', 'tous les tests', 'tutti i test', 'todos os testes', 'все тесты', 'всі тести',
+  '全部通过', '全て通', 'すべて通', '모두 통과', '전부 통과',
+])
+const FAILING = cues([
+  'fail*', 'broken', 'flaky', 'red', 'crash*', 'kaputt', 'rot', 'czerwon*', 'pada*', 'nie przechodz*', 'falla*', 'fallan', 'roj*', 'échou*',
+  'rouge*', 'fallisc*', 'ross*', 'falha*', 'vermelh*', 'пада*', 'красн*', 'червон*', '失败', '失敗', '落ち', '红', '실패', '빨간',
+])
 // a command or a test Claude ran failed
-const OOPS = [
-  'failed', 'fails', 'crashed', 'did not pass', "didn't pass", 'exited with', 'nie przeszed', 'nie przeszł', 'padł', 'wywalił', 'wysypał',
-  'zakończył się błędem', 'nie powiódł', 'nie udało się', 'не получилось', 'не вийшло', 'fehlgeschlagen', 'schlägt fehl', 'abgestürzt', 'abgebrochen', 'nicht durchgelaufen', 'gescheitert',
-  'falló', 'fallaron', 'ha fallado', 'échoué', 'è fallit', 'sono fallit', 'non è riuscit', 'falhou', 'falharam', 'упал', 'не прошл', 'завершился с ошибкой', 'впав', 'не пройш',
-  'завершився з помилкою', '失敗しました', 'エラーで', '失败了', '报错', '실패했',
-]
-// "fixed it, the failing test passes now" is no failure
-const FIXED = ['fixed', 'now pass', ' 0 failed', 'behoben', 'korrigiert', 'naprawi', 'poprawi', 'arreglad', 'corrigé', 'corrett', 'corrigid', 'исправ', 'виправ', '修正', '修复', '수정']
-const SOSO = [
-  'prawie', 'almost', 'nie do końca', 'nie do konca', 'not quite', 'not exactly', 'partially', 'częściowo', 'czesciowo', 'partly', 'mostly',
-  'close, but', 'blisko, ale', 'jein', 'teilweise', 'nicht ganz', 'zum teil', 'größtenteils', 'casi', 'en parte', 'no del todo', 'presque',
-  'pas tout à fait', 'en partie', 'quasi', 'non del tutto', 'in parte', 'quase', 'em parte', 'não exatamente', 'почти', 'не совсем',
-  'частично', 'отчасти', 'майже', 'не зовсім', 'частково', 'ほぼ', '惜しい', '部分的', '差不多', '不完全', '거의', '부분적',
-]
+const OOPS = cues([
+  'failed', 'fails', 'failing', 'still fail*', 'crashed', 'did not pass', "didn't pass", 'exited with', 'timed out', 'nie przesz*', 'padł*', 'padają', 'wysypał*',
+  'zakończył się błędem', 'nie powiód*', 'nie udało się', 'fehlgeschlagen', 'schlägt fehl', 'schlagen fehl', 'abgestürzt', 'abgebrochen',
+  'gescheitert', 'falló', 'fallaron', 'ha fallado', 'fallan', 'échoué', 'échoue', 'échouent', 'planté', 'fallit*', 'non è riuscit*', 'falhou',
+  'falharam', 'falham', 'deu erro', 'упал*', 'не прош*', 'завершился с ошибкой', 'не получилось', 'впав', 'впали', 'не пройш*',
+  'завершився з помилкою', 'не вийшло', '失敗', 'エラーで', '落ちました', '落ちています', '失败', '报错', '出错', '没过', '挂了', '실패',
+])
+// "fixed it, the failing test passes now" is no failure, unless something still fails
+const FIXED = cues([
+  'fixed', 'now pass*', '0 failed', 'behoben', 'korrigiert', 'naprawi*', 'poprawi*', 'arreglad*', 'arreglé', 'corrigé*', 'corrett*', 'corrigi*',
+  'исправ*', 'виправ*', '修正', '修复', '直しました', '수정',
+])
+const STILL = cues([
+  'still', 'nadal', 'wciąż', 'ciągle', 'dalej', 'immer noch', 'noch immer', 'weiterhin', 'todavía', 'sigue*', 'toujours', 'ancora', 'continua',
+  'ainda', 'всё ещё', 'все еще', 'до сих пор', 'досі', 'все ще', 'まだ', '仍', '还是', '依然', '아직', '여전히',
+])
+const SOSO = cues([
+  'almost', 'not quite', 'not exactly', 'not entirely', 'not always', 'partially', 'partly', 'in part', 'more or less', 'sort of', 'kind of', 'close, but',
+  'prawie', 'nie do końca', 'nie do konca', 'nie całkiem', 'nie zawsze', 'częściowo', 'czesciowo', 'po części', 'mniej więcej', 'blisko, ale',
+  'jein', 'teilweise', 'nicht ganz', 'nicht immer', 'zum teil', 'mehr oder weniger', 'casi', 'en parte', 'parcialmente', 'no del todo',
+  'no exactamente', 'no siempre', 'más o menos', 'presque', 'pas tout à fait', 'pas exactement', 'pas toujours', 'en partie', 'partiellement',
+  'plus ou moins', 'quasi', 'non del tutto', 'non esattamente', 'non sempre', 'in parte', 'parzialmente', 'più o meno', 'quase', 'em parte',
+  'não exatamente', 'não totalmente', 'nem sempre', 'mais ou menos', 'почти', 'не совсем', 'не всегда', 'частично', 'отчасти', 'более или менее',
+  'майже', 'не зовсім', 'не завжди', 'частково', 'почасти', 'ほぼ', '惜しい', '部分的', '半分', '一部', '必ずしも', 'だいたい', '差不多', '部分', '不完全',
+  '不一定', '一半', '大体', '基本上', '거의', '부분적', '일부', '반쯤', '대부분', '꼭 그렇', '항상 그런',
+])
 // "yes, but ..." takes the yes back in part
 const YES_BUT = /^(tak|yes|ja|sí|si|oui|sì|sim|да|так|はい|是的|对|네)[,.!]?\s*(ale|but|aber|pero|mais|ma|mas|но|але|但|でも|하지만)(?!\p{L})/u
-const REJECT = [' nie, ', ' nie.', 'actually', 'właściwie', 'wlasciwie', 'niestety', "that's not", 'that is not', 'to nie tak', "you're mistaken", 'you are mistaken', 'mylisz się', 'mylisz sie', 'nieprawda', 'incorrect', 'not correct', 'leider nein', 'leider nicht', 'stimmt nicht', 'du irrst']
+const REJECT = cues([
+  ' nie, ', ' nie.', "that's not", 'that is not', "you're mistaken", 'you are mistaken', 'incorrect', 'not correct', 'not true', 'to nie tak', 'mylisz się',
+  'mylisz sie', 'nieprawda', 'niestety', 'leider nein', 'leider nicht', 'stimmt nicht', 'du irrst', 'nicht richtig', 'no es así', 'no es correcto',
+  'incorrecto', 'te equivocas', "ce n'est pas correct", 'incorrect', 'tu te trompes', 'non è così', 'non è corretto', 'ti sbagli', 'não é assim',
+  'não é correto', 'incorreto', 'не так', 'неверно', 'ошибаешься', 'неправильно', 'невірно', 'помиляєшся', 'неправильно', '違います',
+  'そうではありません', '不对', '不是这样', '错了', '틀렸', '그렇지 않',
+])
 // a definite "cannot": a hard limit is a no, not a shrug
-const IMPOSSIBLE = [
-  "isn't possible", 'is not possible', 'not possible', 'nie da się', 'niemożliwe', 'nicht möglich', 'geht nicht', 'no es posible', 'no se puede',
-  "n'est pas possible", 'impossible', 'non è possibile', 'não é possível', 'невозможно', 'нельзя', 'неможливо', 'できません', '不可能', '无法', '불가능',
-]
-const AGREE = [
-  'masz rację', 'masz racje', "you're right", 'you are right', 'exactly', 'dokładnie', 'dokladnie', 'słusznie', 'slusznie', 'trafnie',
-  'du hast recht', 'sie haben recht', 'genau so', 'tienes razón', 'tu as raison', 'vous avez raison', 'hai ragione', 'você tem razão',
-  'tens razão', 'ты прав', 'вы правы', 'маєш рацію', 'маєте рацію', 'その通り', '你说得对', '您说得对', '맞습니다',
-]
+const IMPOSSIBLE = cues([
+  "isn't possible", 'is not possible', 'not possible', 'nie da się', 'niemożliwe', 'nie można', 'nicht möglich', 'geht nicht',
+  'no es posible', 'no se puede', "n'est pas possible", 'impossible', 'non è possibile', 'non si può', 'não é possível', 'não dá', 'невозможно',
+  'нельзя', 'неможливо', 'не можна', 'できません', '不可能', '无法', '불가능', '할 수 없',
+])
+const AGREE = cues([
+  "you're right", 'you are right', 'exactly', 'masz rację', 'masz racje', 'dokładnie', 'dokladnie', 'słusznie', 'slusznie', 'trafnie', 'du hast recht',
+  'sie haben recht', 'tienes razón', 'tiene razón', 'tu as raison', 'vous avez raison', 'hai ragione', 'ha ragione', 'você tem razão', 'tem razão',
+  'tens razão', 'ты прав*', 'вы прав*', 'маєш рацію', 'маєте рацію', 'その通り', 'おっしゃる通り', '你说得对', '您说得对', '没错', '맞습니다', '맞아요', '맞네요',
+])
 // a clear "I do not know"; it may sit anywhere in the answer
-const UNSURE = [
-  'nie jestem pewien', 'nie jestem pewna', 'not sure', "i'm unsure", 'not certain', 'hard to say', 'nie wiem', "i don't know", 'trudno powiedzieć',
-  'nicht sicher', 'schwer zu sagen', 'weiß ich nicht', 'keine ahnung', 'no estoy segur', 'difícil de decir', 'pas sûr', 'difficile à dire',
-  'non sono sicur', 'difficile dire', 'não tenho certeza', 'difícil dizer', 'не уверен', 'трудно сказать', 'не впевнен', 'важко сказати',
-  'わかりません', '分かりません', '不确定', '很难说', '확실하지', '잘 모르',
-]
+const UNSURE = cues([
+  'not sure', "i'm unsure", 'not certain', 'hard to say', "i don't know", "can't say for sure", 'nie jestem pew*', 'nie wiem', 'trudno powiedzieć',
+  'trudno stwierdzić', 'nicht sicher', 'schwer zu sagen', 'weiß ich nicht', 'keine ahnung', 'no estoy segur*', 'no lo sé', 'no sé', 'difícil de decir',
+  'difícil saber', 'pas sûr', 'je ne sais pas', 'difficile à dire', 'difficile de dire', 'non sono sicur*', 'non lo so', 'non so', 'difficile dire',
+  'não tenho certeza', 'não sei', 'difícil dizer', 'не уверен*', 'не знаю', 'трудно сказать', 'сложно сказать', 'не впевнен*', 'не знаю', 'важко сказати',
+  'わかりません', '分かりません', '分からない', 'わからない', '確信はない', '確信が持て', 'なんとも言え', '不确定', '不知道', '很难说', '说不准', '不好说', '확실하지', '잘 모르', '모르겠',
+])
 // a hedge counts only in the opening: these words are common later in an answer
-const HEDGE = [
-  'probably', 'my guess', 'i guess', 'it seems', 'maybe', 'perhaps', 'chyba', 'raczej', 'zgaduj', 'podejrzewam', 'prawdopodobnie',
-  'vermutlich', 'wahrscheinlich', 'vielleicht', 'vermutung', 'quizás', 'tal vez', 'probablemente', 'peut-être', 'probablement', 'forse',
-  'probabilmente', 'talvez', 'provavelmente', 'наверное', 'возможно', 'скорее всего', 'мабуть', 'можливо', 'たぶん', 'おそらく', 'かもしれ',
-  '可能', '也许', '大概', '아마', '글쎄',
-]
+const HEDGE = cues([
+  'probably', 'my guess', 'i guess', 'best guess', 'it seems', 'maybe', 'perhaps', 'chyba', 'raczej', 'zgaduj*', 'podejrzewam', 'prawdopodobnie',
+  'vermutlich', 'wahrscheinlich', 'vielleicht', 'vermutung', 'quizás', 'quizá', 'tal vez', 'probablemente', 'peut-être', 'probablement', 'forse',
+  'probabilmente', 'talvez', 'provavelmente', 'наверное', 'возможно', 'скорее всего', 'мабуть', 'можливо', 'напевно', 'たぶん', 'おそらく', 'かもしれ',
+  '可能是', '可能会', '也许', '大概', '아마', '글쎄',
+])
 // a closing offer ("Want me to...?") is not a question that blocks the work
 // "Yes, that can be done" is a plain answer, not a confirmation (MOOD_GUIDE)
-const CAN_DO = ['can be done', 'that works', 'it works', 'das geht', 'geht das', 'da się', 'można', 'es posible', 'se puede', "c'est possible", 'si può', 'é possível', 'можно', 'можна', 'できます', '可以', '가능']
+const CAN_DO = cues(['can be done', 'that works', 'it works', 'das geht', 'geht das', 'da się', 'można', 'es posible', 'se puede', "c'est possible", 'si può', 'é possível', 'можно', 'можна', 'できます', '可以', '가능'])
 // Claude answers thanks or a compliment: "you're welcome", or a thanks with joy
 const WELCOME = /^(you're welcome|gern geschehen|gerne?!|nie ma za co|proszę bardzo|de nada|de rien|prego|di nulla|por nada|avec plaisir|con gusto|con piacere|com prazer|с удовольствием|з радістю|не за что|нема за що|どういたしまして|不客气|别客气|천만에요)/u
 const THANKED = /^(thanks|thank you|danke|dzięki|dziękuję|gracias|merci|grazie|obrigad|спасибо|дякую|ありがとう|谢谢|감사|고마워)[^.?]{0,40}(!|glad|nice to hear|happy to help|freut mich|miło|cieszę|me alegra|ravi|felice|fico feliz|рад|嬉しい|高兴|기쁘)/u
-const OFFER = [
+const OFFER = cues([
   'want me to', 'shall i', 'should i', 'would you like', 'do you want me', 'let me know', 'soll ich', 'möchtest du', 'willst du', 'sollen wir',
-  'chcesz', 'czy mam', 'zrobić', 'mogę', '¿quieres', 'te gustaría', 'veux-tu', 'voulez-vous', 'tu veux', 'vuoi', 'quer que',
+  'chcesz', 'czy mam', 'zrobić', 'mogę', '¿quieres', 'quieres que', 'te gustaría', 'veux-tu', 'voulez-vous', 'tu veux', 'vuoi', 'quer que',
   'deseja', 'хочешь', 'хотите', 'хочеш', 'しましょうか', '要我', '需要我', '할까요', '드릴까요',
-]
+])
 
 export function sceneForAnswer(answer: string, isAborted: boolean): string {
   if (isAborted) {
     return 'surprised'
   }
 
-  const lower = answer.toLowerCase().trimStart()
+  const lower = normalize(answer).trimStart()
   const head = lower.slice(0, 300)
   const rest = openingOf(lower)
   const opening = rest.slice(0, 150)
@@ -213,11 +297,13 @@ export function sceneForAnswer(answer: string, isAborted: boolean): string {
     return 'surprised'
   }
 
-  if (has(opening, OOPS) && !has(opening, FIXED)) {
+  if (has(opening, OOPS) && !(has(opening, FIXED) && !has(opening, STILL))) {
     return 'oops'
   }
 
-  if (has(opening.slice(0, 100), CHEER)) {
+  const burst = opening.slice(0, 100)
+
+  if (has(burst, CHEER) || (/[!！]/u.test(burst) && (has(burst, PROUD) || has(burst, TURNAROUND)))) {
     return 'cheer'
   }
 
@@ -226,7 +312,7 @@ export function sceneForAnswer(answer: string, isAborted: boolean): string {
   }
 
   // "Nein, ..." is a firm no; "Nie jestem pewien" opens with a no but is a shrug
-  if (negates && /^[^\s,.!]+[,.!]/u.test(opening)) {
+  if (negates && /^[^\s,.!]+[,.!]/u.test(opening) && !has(opening.slice(0, 40), UNSURE)) {
     return 'no'
   }
 
@@ -234,7 +320,7 @@ export function sceneForAnswer(answer: string, isAborted: boolean): string {
     return 'shrug'
   }
 
-  if (YES.test(opening)) {
+  if (YES.test(opening) || (UK_YES.test(opening) && UKRAINIAN.test(lower))) {
     return has(opening.slice(0, 30), CAN_DO) ? 'happy' : 'yes'
   }
 
@@ -259,8 +345,9 @@ export function sceneForAnswer(answer: string, isAborted: boolean): string {
 export function sceneForExchange(user: string, answer: string, isAborted: boolean): string {
   const scene = sceneForAnswer(answer, isAborted)
   const cue = socialCue(user)
+  const userLower = normalize(user)
 
-  if (scene === 'happy' && has(openingOf(answer.toLowerCase()).slice(0, 100), GREEN) && has(user.toLowerCase(), FAILING)) {
+  if (scene === 'happy' && has(openingOf(normalize(answer)).slice(0, 100), TURNAROUND) && (has(userLower, FAILING) || isFrustrated(user, userLower))) {
     return 'cheer'
   }
 
