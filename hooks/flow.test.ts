@@ -147,13 +147,13 @@ test('a workflow agent, left out of the agent list, still gets a mini robot unti
   expect(await agentsShown($)).toBe(1)
 
   // the other's end is missed: it goes after a long silence, but a tool call keeps it alive
-  await clock.advance(20 * 60_000)
+  await clock.advance(16 * 60_000)
   await $.tool.call({ tool: 'Bash', input: { command: 'ls' }, agentId: 'w1', tool_use_id: 'u1' } as never)
-  await clock.advance(20 * 60_000)
+  await clock.advance(16 * 60_000)
   await clock.settle()
   expect(await agentsShown($)).toBe(1)
 
-  await clock.advance(31 * 60_000)
+  await clock.advance(15 * 60_000)
   await clock.settle()
   expect(await agentsShown($)).toBe(0)
 })

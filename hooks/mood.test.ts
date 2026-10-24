@@ -142,6 +142,15 @@ test('neighboring minis blink out of step', () => {
   expect(tips).toBe('aagg')
 })
 
+test('the bubble stands beside rows of different widths, such as the +N label of many agents', () => {
+  const band = halfBlock(withMinis(compose({}), 13, 0))
+  band[band.length - 2]!.push({ text: ' +9', color: '#8a93a3' })
+  const rows = withBubble(band, 'Jupii!')
+
+  expect(rows).toHaveLength(band.length)
+  expect(rows.every(row => row.every(span => typeof span.text === 'string'))).toBe(true)
+})
+
 test('the owl minis wear its ear tufts instead of the robot antenna', () => {
   const top = H - 8
   const owl = withMinis(compose({}), 1, 0, 'owl')

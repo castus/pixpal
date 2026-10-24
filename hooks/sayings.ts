@@ -265,7 +265,8 @@ export function withBubble(rows: Span[][], text: string, elapsed = Number.POSITI
       out[x + i] = inText ? { ch: bodyCells[i - 1]!, color: INK, bg: SHADES[2] } : fromHalves(top, bottom)
     }
 
-    return toSpans(out.map(cell => cell ?? { ch: ' ' }))
+    // a row shorter than the widest one has holes up to x, which map() would skip
+    return toSpans(Array.from(out, cell => cell ?? { ch: ' ' }))
   })
 }
 
