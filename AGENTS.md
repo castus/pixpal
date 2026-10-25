@@ -43,7 +43,13 @@ The tools run on plain Node 22+ with `--experimental-strip-types`, so imports be
 
 ## Releasing
 
-The version lives in three places: `.claude-plugin/plugin.json`, `package.json` and `PIXPAL_VERSION` in `hooks/register.tsx` (a module cannot read the JSON). Bump all three, move the `[Unreleased]` notes in `CHANGELOG.md` under the new version, commit, then `claude plugin tag .`.
+The version lives in three places: `.claude-plugin/plugin.json`, `package.json` and `PIXPAL_VERSION` in `hooks/register.tsx` (a module cannot read the JSON). To release:
+
+1. Bump all three and move the `[Unreleased]` notes in `CHANGELOG.md` under `## [x.y.z]`.
+2. Commit and push to `main`.
+3. `claude plugin tag . --push` creates and pushes the tag `pixpal--vX.Y.Z`.
+
+The tag starts `.github/workflows/release.yml`, which checks the tag against the three versions and publishes a GitHub release with that version's section of the changelog as its notes.
 
 ## Privacy rules
 

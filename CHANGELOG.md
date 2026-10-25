@@ -4,8 +4,6 @@ All notable changes to Pixpal. The format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
-- `/pixpal report` prints versions and settings to paste into a bug report.
-
 ## [1.0.0]
 
 First public version.
@@ -16,3 +14,4 @@ First public version.
 - Speech bubbles in 12 built-in languages, and in any other language by one-time translation.
 - A mini robot for every running subagent, including workflow agents.
 - Shares the band above the prompt with other mods; `/pixpal show` and `/pixpal hide`.
+- `/pixpal report` prints versions and settings to paste into a bug report.

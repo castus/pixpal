@@ -1,0 +1,44 @@
+name: Release
+
+# `claude plugin tag . --push` pushes pixpal--vX.Y.Z; that publishes the GitHub release.
+on:
+  push:
+    tags: ['pixpal--v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to publish a release for, e.g. pixpal--v1.0.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Check the tag against the versions in the repo
+        run: |
+          version="${TAG#pixpal--v}"
+          for file in .claude-plugin/plugin.json package.json; do
+            found=$(grep -m1 '"version"' "$file" | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+            [ "$found" = "$version" ] || { echo "$file says $found, the tag says $version"; exit 1; }
+          done
+          grep -q "PIXPAL_VERSION = '$version'" hooks/register.tsx || { echo "PIXPAL_VERSION is not $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Take this version's notes from the changelog
+        run: |
+          awk -v v="$VERSION" '/^## \[/ { on = ($0 ~ "^## \\[" v "\\]"); next } on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "CHANGELOG.md has no section for $VERSION"; exit 1; }
+          cat notes.md
+
+      - name: Publish the release
+        run: gh release create "$TAG" --title "Pixpal $VERSION" --notes-file notes.md --verify-tag

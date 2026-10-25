@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="#install"><strong>Install</strong></a> ·
+  <a href="#demos"><strong>Demos</strong></a> ·
+  <a href="#install">Install</a> ·
   <a href="#characters">Characters</a> ·
   <a href="#what-it-shows">What it shows</a> ·
   <a href="#settings">Settings</a> ·
@@ -26,6 +27,34 @@
 - When the answer arrives, it shows how Claude feels about it: happy, proud, sorry, unsure, surprised: one of 15 emotions, picked by keyword rules, or by Claude Haiku if you let it.
 - Five characters (robot, cat, Claude, owl, ghost), a dark and a light look, and speech bubbles in any language.
 - Each running subagent stands beside it as a mini robot.
+
+## Demos
+
+Recorded in a real Claude Code session; the scripts are in [`docs/*.tape`](docs) and you can replay them with [VHS](https://github.com/charmbracelet/vhs).
+
+### A real question
+
+Claude looks something up, so Pixpal acts out the tools (a lens for the search, a book for reading). When the answer arrives it shows how it feels, and a thank-you makes it shy.
+
+<p align="center"><img src="docs/emotions.gif" alt="Pixpal searches and reads while Claude answers, then reacts to the answer and to a thank-you" width="100%"></p>
+
+### Sleeping and waking up
+
+After a minute of quiet, Pixpal falls asleep. Start typing and it peeks over the fence at your prompt.
+
+<p align="center"><img src="docs/demo.gif" alt="Pixpal falls asleep, then wakes up when the user types Wake up, Neo" width="100%"></p>
+
+### Any language
+
+`/pixpal language spanish`, then `/pixpal emotions ai`: the bubbles speak Spanish and the emotion is picked from the exchange.
+
+<p align="center"><img src="docs/spanish.gif" alt="Pixpal in Spanish answers a question in Spanish and says Ay, gracias to a thank-you" width="100%"></p>
+
+### Another look, another character
+
+`/pixpal theme light` and `/pixpal skin claude`.
+
+<p align="center"><img src="docs/light.gif" alt="The light theme with the Claude character, answering a quick question" width="100%"></p>
 
 ## Install
 
