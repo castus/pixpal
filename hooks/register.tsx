@@ -356,6 +356,7 @@ const helpText = async ($: Ctx) => {
     `- \`/pixpal bubbles [on|off]\`: speech bubbles on or off${now((await read($, bubbles)) ? 'on' : 'off')}`,
     `- \`/pixpal show\`, \`/pixpal hide\`: Pixpal above the prompt or not; \`/pixpal visible\` picks${now((await read($, visible)) ? 'shown' : 'hidden')}`,
     `- \`/pixpal emotions [ai|keywords]\`: who picks the emotion; ai sends a short piece of each exchange to Claude Haiku on your account${now((await read($, smart)) ? 'ai' : 'keywords')}`,
+    '- `/pixpal report`: the details to paste into a bug report (versions and settings, never your messages)',
     '- Without a value, a setting opens a picker.',
   ].join('\n')
 }
@@ -517,6 +518,42 @@ const statsText = async ($: EngineInterface) => {
     `Tokens: ${stats.inTokens} in, ${stats.outTokens} out (about ${per(stats.inTokens)} in and ${per(stats.outTokens)} out per call)`,
     `Latency: ${per(stats.ms)} ms on average`,
     `Last error: ${String((await $.store.get(ERROR_KEY)) ?? 'none')}`,
+  ].join('\n')
+}
+
+// Bump together with .claude-plugin/plugin.json and package.json (a module cannot read them).
+const PIXPAL_VERSION = '1.0.0'
+
+// /pixpal report: what a bug report needs, in one block to paste into an issue. Settings,
+// versions and counters only: never a message, an answer or a path.
+const reportText = async ($: Ctx) => {
+  const { version } = await $.session.version()
+  const system = await $.process.run(['uname', '-sm'], { timeoutMs: 5000 }).catch(() => undefined)
+  const stats = { ...NO_STATS, ...((await $.store.get(STATS_KEY)) as Partial<Stats> | undefined) }
+  const settings = {
+    skin: await read($, skin),
+    theme: await read($, theme),
+    systemTheme: await read($, systemTheme),
+    language: await read($, language),
+    bubbles: await read($, bubbles),
+    visible: await read($, visible),
+    emotions: (await read($, smart)) ? 'ai' : 'keywords',
+    agents: await read($, agents),
+  }
+
+  return [
+    'Copy this block into your issue:',
+    '',
+    '```',
+    `pixpal ${PIXPAL_VERSION}`,
+    `claude code ${version}`,
+    `system ${(system?.stdout ?? 'unknown').trim()}`,
+    `settings ${JSON.stringify(settings)}`,
+    `classifier calls ${stats.calls} (answered ${stats.hits}, fell back ${stats.misses})`,
+    `last error ${String((await $.store.get(ERROR_KEY)) ?? 'none')}`,
+    '```',
+    '',
+    'Your terminal and what you saw are still worth adding.',
   ].join('\n')
 }
 
@@ -906,6 +943,10 @@ export const register: Register = on => {
       void reactToAnswer($, 'dzięki, super robota', 'Gotowe, wszystko działa.', false, seconds * 1000, () => false).catch(error => recordError($, error))
 
       return { text: `Phase 3 simulated as if the turn took ${seconds} s.` }
+    }
+
+    if (name === 'report') {
+      return { text: await reportText($) }
     }
 
     if (name === 'stats') {

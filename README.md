@@ -85,6 +85,7 @@ A speech bubble names each emotion ("Yay!", "Sort of", "No worries") and each ki
 | `/pixpal bubbles [on\|off]` | speech bubbles on or off |
 | `/pixpal show` \| `/pixpal hide` | Pixpal above the prompt or not; hidden, it leaves the band to other mods |
 | `/pixpal emotions [ai\|keywords]` | who picks the emotion: keyword rules (default, sends nothing) or Claude Haiku (see Privacy) |
+| `/pixpal report` | a block with versions and settings to paste into a bug report (never your messages) |
 | `/pixpal help` | all of the above, with the current values |
 
 Give a setting without a value (`/pixpal language`) to pick it from a list: ↑↓ move, Enter picks, Esc closes. In the language list, the last row takes any language you type.
@@ -111,7 +112,7 @@ On macOS, `theme auto` runs `defaults read -g AppleInterfaceStyle` once a minute
 
 ## Contributing
 
-Pull requests are very welcome. If something breaks or feels off, please [open an issue](https://github.com/castus/pixpal/issues).
+Pull requests are very welcome. If something breaks or feels off, please [open an issue](https://github.com/castus/pixpal/issues). [CONTRIBUTING.md](CONTRIBUTING.md) explains how to run the tests and how to add a character, an emotion or a language; see also the [changelog](CHANGELOG.md) and the [security policy](SECURITY.md).
 
 `MOOD_GUIDE.md` is the design of what Pixpal shows and when.
 

@@ -1,6 +1,6 @@
 {
   "name": "pixpal",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A pixel-art friend above the prompt that shows what Claude is doing and how it feels",
   "types": "./types/index.d.ts",
   "author": {

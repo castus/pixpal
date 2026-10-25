@@ -321,3 +321,18 @@ test('hidden, Pixpal leaves the band to the others, and a new session reads the 
   expect((await $.command.run({ command: 'pixpal', args: 'hide' } as never)).text).toContain('/pixpal show')
   expect(await band()).not.toContain('pixpal.tsx')
 })
+
+test('/pixpal report lists versions and settings for a bug report, and never the conversation', async ($, on) => {
+  mock.clock(on)
+  mock.store(on, {})
+  bottom(on, 'happy')
+  on('session.version', () => ({ value: { version: '2.1.999' } }) as never)
+  await startWith($, on)
+
+  const text = (await $.command.run({ command: 'pixpal', args: 'report' } as never)).text ?? ''
+
+  expect(text).toMatch(/pixpal \d+\.\d+\.\d+/)
+  expect(text).toContain('claude code 2.1.999')
+  expect(text).toContain('system Dark')
+  expect(text).toContain('"skin":"robot"')
+})
